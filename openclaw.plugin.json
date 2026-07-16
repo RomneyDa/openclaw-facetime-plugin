@@ -1,0 +1,84 @@
+{
+  "id": "facetime",
+  "name": "FaceTime Audio",
+  "description": "macOS FaceTime Audio channel using ScreenCaptureKit, BlackHole, and realtime voice.",
+  "channels": ["facetime"],
+  "enabledByDefaultOnPlatforms": ["darwin"],
+  "activation": {
+    "onStartup": true,
+    "onCapabilities": ["tool"]
+  },
+  "contracts": {
+    "tools": ["facetime_call"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "name": { "type": "string", "minLength": 1 },
+      "enabled": { "type": "boolean" },
+      "identity": { "type": "string", "minLength": 1 },
+      "inboundPolicy": { "enum": ["allowlist", "open", "disabled"], "default": "allowlist" },
+      "allowFrom": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+      "autoAnswer": { "type": "boolean", "default": true },
+      "helperPath": { "type": "string", "minLength": 1 },
+      "blackHoleDevice": { "type": "string", "minLength": 1, "default": "BlackHole 2ch" },
+      "maxCallDurationMs": { "type": "integer", "minimum": 1, "default": 3600000 },
+      "dialTimeoutMs": { "type": "integer", "minimum": 1, "default": 45000 },
+      "realtime": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": { "type": "string", "minLength": 1, "default": "openai" },
+          "model": { "type": "string", "minLength": 1 },
+          "voice": { "type": "string", "minLength": 1 },
+          "instructions": { "type": "string", "minLength": 1 },
+          "greeting": { "type": "string", "minLength": 1 },
+          "agentId": { "type": "string", "minLength": 1, "default": "main" },
+          "toolPolicy": { "enum": ["none", "read-only", "owner"], "default": "read-only" },
+          "providers": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true } }
+        }
+      },
+      "accounts": { "type": "object", "additionalProperties": { "$ref": "#" } },
+      "defaultAccount": { "type": "string", "minLength": 1 }
+    }
+  },
+  "channelConfigs": {
+    "facetime": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "enabled": { "type": "boolean" },
+          "identity": { "type": "string", "minLength": 1 },
+          "inboundPolicy": { "enum": ["allowlist", "open", "disabled"], "default": "allowlist" },
+          "allowFrom": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "autoAnswer": { "type": "boolean", "default": true },
+          "helperPath": { "type": "string", "minLength": 1 },
+          "blackHoleDevice": { "type": "string", "minLength": 1, "default": "BlackHole 2ch" },
+          "maxCallDurationMs": { "type": "integer", "minimum": 1, "default": 3600000 },
+          "dialTimeoutMs": { "type": "integer", "minimum": 1, "default": 45000 },
+          "realtime": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "provider": { "type": "string", "minLength": 1, "default": "openai" },
+              "model": { "type": "string", "minLength": 1 },
+              "voice": { "type": "string", "minLength": 1 },
+              "instructions": { "type": "string", "minLength": 1 },
+              "greeting": { "type": "string", "minLength": 1 },
+              "agentId": { "type": "string", "minLength": 1, "default": "main" },
+              "toolPolicy": { "enum": ["none", "read-only", "owner"], "default": "read-only" },
+              "providers": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true } }
+            }
+          },
+          "accounts": { "type": "object", "additionalProperties": { "$ref": "#" } },
+          "defaultAccount": { "type": "string", "minLength": 1 }
+        }
+      },
+      "label": "FaceTime",
+      "description": "macOS FaceTime Audio realtime voice channel"
+    }
+  }
+}

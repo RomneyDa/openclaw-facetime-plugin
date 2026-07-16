@@ -1,0 +1,65 @@
+{
+  "name": "openclaw-facetime-plugin",
+  "version": "0.1.0",
+  "description": "macOS FaceTime Audio channel for OpenClaw with ScreenCaptureKit, BlackHole, and realtime voice",
+  "type": "module",
+  "main": "index.ts",
+  "license": "MIT",
+  "scripts": {
+    "build:native": "swift build --package-path native -c release",
+    "test:native": "swift build --package-path native && native/.build/debug/openclaw-facetime-bridge --self-test",
+    "postinstall": "npm run build:native",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run build:native && npm run test:native && npm run test"
+  },
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "os": [
+    "darwin"
+  ],
+  "keywords": [
+    "openclaw",
+    "facetime",
+    "channel",
+    "voice",
+    "realtime",
+    "screencapturekit",
+    "blackhole",
+    "macos"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "typebox": "^1.3.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "openclaw": "2026.7.1",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.2"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "compat": {
+      "pluginApi": ">=2026.7.1"
+    },
+    "channel": {
+      "id": "facetime",
+      "label": "FaceTime",
+      "selectionLabel": "FaceTime Audio (macOS)",
+      "blurb": "Answer and place FaceTime Audio calls through a realtime voice agent on this Mac."
+    }
+  }
+}

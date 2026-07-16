@@ -1,0 +1,6 @@
+src/**/*.test.ts
+native/Tests/
+native/.build/
+.worktrees/
+tmp/
+*.tgz

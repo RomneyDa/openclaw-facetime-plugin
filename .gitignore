@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.worktrees/
+.swiftpm/
+native/.build/
+tmp/
+*.tgz
+.DS_Store
