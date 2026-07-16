@@ -50,4 +50,26 @@ describe("FaceTime framed IPC", () => {
       decodeFaceTimeEvent(Buffer.from('{"type":"ready","pid":"not-a-number"}')),
     ).toThrow(/Invalid FaceTime native event/);
   });
+
+  it("keeps generated frame input bounded and deterministic", () => {
+    let state = 0x5eed1234;
+    const random = () => {
+      state = (state * 1_664_525 + 1_013_904_223) >>> 0;
+      return state;
+    };
+    for (let iteration = 0; iteration < 1_000; iteration += 1) {
+      const length = random() % 512;
+      const input = Buffer.alloc(length);
+      for (let index = 0; index < length; index += 1) {
+        input[index] = random() & 0xff;
+      }
+      const decoder = new FaceTimeFrameDecoder();
+      try {
+        decoder.push(input);
+        decoder.finish();
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+      }
+    }
+  });
 });

@@ -2,7 +2,7 @@ import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
 import type { RealtimeVoiceBridgeSession } from "openclaw/plugin-sdk/realtime-voice";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FaceTimeNativeBridge } from "./native-bridge.js";
+import type { FaceTimeOutputPacer } from "./output-pacer.js";
 import { startFaceTimeRealtimeSession } from "./realtime.js";
 import type { ResolvedFaceTimeAccount } from "./types.js";
 
@@ -50,12 +50,10 @@ function account(toolPolicy: "none" | "read-only" | "owner" = "read-only"): Reso
 describe("FaceTime realtime bridge", () => {
   let options: SessionOptions;
   let session: RealtimeVoiceBridgeSession;
-  let nativeBridge: FaceTimeNativeBridge;
-  let outputBytes: ReturnType<typeof vi.fn>;
+  let output: FaceTimeOutputPacer;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    outputBytes = vi.fn();
     session = {
       connect: vi.fn(async () => {}),
       close: vi.fn(),
@@ -68,11 +66,11 @@ describe("FaceTime realtime bridge", () => {
       triggerGreeting: vi.fn(),
       bridge: { isConnected: () => true },
     } as unknown as RealtimeVoiceBridgeSession;
-    nativeBridge = {
-      running: true,
-      sendAudio: vi.fn(() => true),
-      sendCommand: vi.fn(),
-    } as unknown as FaceTimeNativeBridge;
+    output = {
+      isOpen: true,
+      send: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as FaceTimeOutputPacer;
     sdk.resolveProvider.mockReturnValue({ provider: { id: "mock" }, providerConfig: {} });
     sdk.resolveTools.mockReturnValue([{ name: "openclaw_agent_consult" }]);
     sdk.resolveToolsAllow.mockReturnValue(["safe-read-only"]);
@@ -90,29 +88,24 @@ describe("FaceTime realtime bridge", () => {
       account: account(toolPolicy),
       callId: "call-1",
       peer: "caller@example.com",
-      nativeBridge,
-      onOutputAudio: outputBytes,
+      output,
     });
   }
 
-  it("uses PCM16 24 kHz mono and counts only audio accepted by the native sink", async () => {
+  it("uses PCM16 24 kHz mono and delegates output to the shared pacer", async () => {
     const result = await start();
     expect(result).toBe(session);
     expect(session.connect).toHaveBeenCalledOnce();
     expect(options.audioFormat).toEqual({ encoding: "pcm16", sampleRateHz: 24_000, channels: 1 });
     const audio = Buffer.from([1, 2, 3, 4]);
     options.audioSink.sendAudio(audio);
-    expect(nativeBridge.sendAudio).toHaveBeenCalledWith(audio);
-    expect(outputBytes).toHaveBeenCalledWith(4);
-    vi.mocked(nativeBridge.sendAudio).mockReturnValue(false);
-    options.audioSink.sendAudio(audio);
-    expect(outputBytes).toHaveBeenCalledTimes(1);
+    expect(output.send).toHaveBeenCalledWith(audio);
   });
 
   it("clears queued BlackHole audio on provider interruption", async () => {
     await start();
     options.audioSink.clearAudio();
-    expect(nativeBridge.sendCommand).toHaveBeenCalledWith({ type: "clear-audio", callId: "call-1" });
+    expect(output.clear).toHaveBeenCalledOnce();
   });
 
   it("fails closed for provider tool calls that are unavailable by policy", async () => {

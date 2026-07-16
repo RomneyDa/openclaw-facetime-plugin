@@ -21,6 +21,24 @@ export type FaceTimeRealtimeConfig = {
   providers?: Record<string, Record<string, unknown> | undefined>;
 };
 
+export type FaceTimeAvatarConfig = {
+  enabled?: boolean;
+  port?: number;
+  modelUrl?: string;
+  audioDelayMs?: number;
+  maxBufferedBytes?: number;
+  obs?: {
+    enabled?: boolean;
+    url?: string;
+    passwordEnv?: string;
+    sceneName?: string;
+    sourceName?: string;
+    width?: number;
+    height?: number;
+    autoStartVirtualCamera?: boolean;
+  };
+};
+
 export type FaceTimeAccountConfig = {
   name?: string;
   enabled?: boolean;
@@ -32,6 +50,7 @@ export type FaceTimeAccountConfig = {
   maxCallDurationMs?: number;
   dialTimeoutMs?: number;
   realtime?: FaceTimeRealtimeConfig;
+  avatar?: FaceTimeAvatarConfig;
   accounts?: Record<string, FaceTimeAccountConfig | undefined>;
   defaultAccount?: string;
 };
@@ -83,6 +102,8 @@ export type FaceTimeCallSnapshot = {
   realtimeProvider?: string;
   inputBytes: number;
   outputBytes: number;
+  outputDroppedBytes?: number;
+  avatarDroppedBytes?: number;
 };
 
 export type FaceTimeNativeEvent =

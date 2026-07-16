@@ -9,7 +9,7 @@ import {
 import {
   listFaceTimeAccountIds,
   resolveDefaultFaceTimeAccountId,
-  resolveFaceTimeAccountForStatus,
+  resolveFaceTimeAccount,
 } from "./facetime/accounts.js";
 import { FaceTimeChannelConfigSchema } from "./facetime/config.js";
 import type { FaceTimeProbe, ResolvedFaceTimeAccount } from "./facetime/types.js";
@@ -38,7 +38,7 @@ export function createFaceTimePluginBase(): ChannelPlugin<ResolvedFaceTimeAccoun
     configSchema: FaceTimeChannelConfigSchema,
     config: {
       listAccountIds: listFaceTimeAccountIds,
-      resolveAccount: (cfg, accountId) => resolveFaceTimeAccountForStatus({ cfg, accountId }),
+      resolveAccount: (cfg, accountId) => resolveFaceTimeAccount({ cfg, accountId }),
       defaultAccountId: resolveDefaultFaceTimeAccountId,
       setAccountEnabled: ({ cfg, accountId, enabled }) =>
         setAccountEnabledInConfigSection({
@@ -66,7 +66,7 @@ export function createFaceTimePluginBase(): ChannelPlugin<ResolvedFaceTimeAccoun
         blackHoleDevice: account.blackHoleDevice,
       }),
       resolveAllowFrom: ({ cfg, accountId }) =>
-        resolveFaceTimeAccountForStatus({ cfg, accountId }).config.allowFrom ?? [],
+        resolveFaceTimeAccount({ cfg, accountId }).config.allowFrom ?? [],
       formatAllowFrom: ({ allowFrom }) =>
         allowFrom.map((entry) => String(entry).trim()).filter(Boolean),
     },

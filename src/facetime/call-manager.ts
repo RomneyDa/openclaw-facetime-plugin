@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
 import type { RealtimeVoiceBridgeSession } from "openclaw/plugin-sdk/realtime-voice";
+import { FaceTimeAvatarRuntime } from "../avatar/runtime.js";
 import { FaceTimeNativeBridge } from "./native-bridge.js";
+import { FaceTimeOutputPacer } from "./output-pacer.js";
 import { startFaceTimeRealtimeSession } from "./realtime.js";
 import { faceTimePeerId, normalizeFaceTimeAddress } from "./targets.js";
 import type {
@@ -59,6 +61,8 @@ export class FaceTimeCallManager {
   #realtimeStarting: Promise<void> | null = null;
   #maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
   #dialTimer: ReturnType<typeof setTimeout> | null = null;
+  #avatar: FaceTimeAvatarRuntime | null = null;
+  #outputPacer: FaceTimeOutputPacer | null = null;
   #pendingSpeech: string | null = null;
   #started = false;
   #stopping = false;
@@ -133,6 +137,18 @@ export class FaceTimeCallManager {
         sampleRateHz: 24_000,
         channels: 1,
       });
+      if (this.account.config.avatar?.enabled) {
+        const avatar = new FaceTimeAvatarRuntime({ account: this.account, logger: this.logger });
+        try {
+          await avatar.start();
+          this.#avatar = avatar;
+        } catch (error) {
+          this.logger.warn?.(
+            `[facetime-avatar] disabled after startup failure: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          await avatar.stop().catch(() => {});
+        }
+      }
     } catch (error) {
       this.#started = false;
       this.#detachBridgeListeners();
@@ -141,10 +157,15 @@ export class FaceTimeCallManager {
     signal?.addEventListener("abort", () => void this.stop(), { once: true });
   }
 
-  snapshot(): { active: FaceTimeCallSnapshot | null; recent: FaceTimeCallSnapshot[] } {
+  snapshot(): {
+    active: FaceTimeCallSnapshot | null;
+    recent: FaceTimeCallSnapshot[];
+    avatar: ReturnType<FaceTimeAvatarRuntime["snapshot"]> | null;
+  } {
     return {
       active: this.#active ? { ...this.#active } : null,
       recent: this.#recent.map((call) => ({ ...call })),
+      avatar: this.#avatar?.snapshot() ?? null,
     };
   }
 
@@ -241,6 +262,8 @@ export class FaceTimeCallManager {
     try {
       await this.bridge.stop();
     } finally {
+      await this.#avatar?.stop();
+      this.#avatar = null;
       this.#detachBridgeListeners();
       this.#started = false;
     }
@@ -372,6 +395,20 @@ export class FaceTimeCallManager {
   }
 
   async #startRealtimeForCall(call: FaceTimeCallSnapshot): Promise<void> {
+    await this.#avatar?.beginCall(call.id);
+    const outputPacer = new FaceTimeOutputPacer({
+      nativeBridge: this.bridge,
+      avatar: this.#avatar ?? undefined,
+      callId: call.id,
+      delayMs: this.#avatar ? (this.account.config.avatar?.audioDelayMs ?? 80) : 0,
+      logger: this.logger,
+      onDelivered: (bytes) => {
+        if (this.#active?.id === call.id) {
+          call.outputBytes += bytes;
+        }
+      },
+    });
+    this.#outputPacer = outputPacer;
     this.#maxDurationTimer = setTimeout(() => {
       this.logger.info(`[facetime] ending ${call.id}: maximum call duration reached`);
       void this.hangup(call.id).catch((error) => {
@@ -389,15 +426,10 @@ export class FaceTimeCallManager {
         account: this.account,
         callId: call.id,
         peer: call.peer,
-        nativeBridge: this.bridge,
+        output: outputPacer,
         onReady: (providerId) => {
           call.realtimeProvider = providerId;
           this.logger.info(`[facetime] realtime provider ready: ${providerId}`);
-        },
-        onOutputAudio: (bytes) => {
-          if (this.#active?.id === call.id) {
-            call.outputBytes += bytes;
-          }
         },
         onTranscript: (role, text, final) => {
           if (final) {
@@ -453,6 +485,16 @@ export class FaceTimeCallManager {
       realtime?.close();
     } catch {
       // Provider may already be closed.
+    }
+    const outputPacer = this.#outputPacer;
+    this.#outputPacer = null;
+    outputPacer?.clear();
+    if (outputPacer?.droppedBytes) {
+      call.outputDroppedBytes = outputPacer.droppedBytes;
+    }
+    const avatarDroppedBytes = await this.#avatar?.endCall(call.id);
+    if (avatarDroppedBytes) {
+      call.avatarDroppedBytes = avatarDroppedBytes;
     }
     call.state = state;
     if (reason) {

@@ -27,6 +27,14 @@ function mergeAccountConfig(
         ...account?.realtime?.providers,
       },
     },
+    avatar: {
+      ...base.avatar,
+      ...account?.avatar,
+      obs: {
+        ...base.avatar?.obs,
+        ...account?.avatar?.obs,
+      },
+    },
     accounts: base.accounts,
   };
 }
@@ -71,5 +79,3 @@ export function resolveFaceTimeAccount(params: {
     blackHoleDevice: merged.blackHoleDevice?.trim() || "BlackHole 2ch",
   };
 }
-
-export const resolveFaceTimeAccountForStatus = resolveFaceTimeAccount;

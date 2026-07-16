@@ -1,5 +1,6 @@
 .worktrees/
 coverage/
+docs/evidence/*.png
 native/.build/
 scripts/
 src/**/*.test.ts

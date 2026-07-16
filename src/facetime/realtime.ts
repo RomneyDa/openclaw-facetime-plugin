@@ -10,7 +10,7 @@ import {
   type RealtimeVoiceBridgeSession,
   type RealtimeVoiceToolCallEvent,
 } from "openclaw/plugin-sdk/realtime-voice";
-import type { FaceTimeNativeBridge } from "./native-bridge.js";
+import type { FaceTimeOutputPacer } from "./output-pacer.js";
 import { faceTimePeerId } from "./targets.js";
 import { FACETIME_AUDIO_FORMAT, type ResolvedFaceTimeAccount } from "./types.js";
 
@@ -26,9 +26,8 @@ export async function startFaceTimeRealtimeSession(params: {
   account: ResolvedFaceTimeAccount;
   callId: string;
   peer: string;
-  nativeBridge: FaceTimeNativeBridge;
+  output: FaceTimeOutputPacer;
   onTranscript?: (role: "user" | "assistant", text: string, final: boolean) => void;
-  onOutputAudio?: (byteLength: number) => void;
   onReady?: (providerId: string) => void;
   onClose?: (reason: "completed" | "error") => void;
 }): Promise<RealtimeVoiceBridgeSession> {
@@ -102,14 +101,12 @@ export async function startFaceTimeRealtimeSession(params: {
     markStrategy: "ack-immediately",
     tools: resolveRealtimeVoiceAgentConsultTools(policy),
     audioSink: {
-      isOpen: () => params.nativeBridge.running,
+      isOpen: () => params.output.isOpen,
       sendAudio: (audio) => {
-        if (params.nativeBridge.sendAudio(audio)) {
-          params.onOutputAudio?.(audio.byteLength);
-        }
+        params.output.send(audio);
       },
       clearAudio: () => {
-        params.nativeBridge.sendCommand({ type: "clear-audio", callId: params.callId });
+        params.output.clear();
       },
     },
     onTranscript: (role, text, final) => {

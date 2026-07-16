@@ -1,3 +1,4 @@
+import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -42,6 +43,14 @@ function mergeAccountConfig(base, account) {
         ...account?.realtime?.providers
       }
     },
+    avatar: {
+      ...base.avatar,
+      ...account?.avatar,
+      obs: {
+        ...base.avatar?.obs,
+        ...account?.avatar?.obs
+      }
+    },
     accounts: base.accounts
   };
 }
@@ -79,7 +88,6 @@ function resolveFaceTimeAccount(params) {
     blackHoleDevice: merged.blackHoleDevice?.trim() || "BlackHole 2ch"
   };
 }
-var resolveFaceTimeAccountForStatus = resolveFaceTimeAccount;
 
 // src/facetime/config.ts
 import { buildJsonChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-schema";
@@ -14620,6 +14628,14 @@ function normalizeFaceTimeAddress(value) {
 var nonEmpty = external_exports.string().trim().min(1);
 var positiveMs = external_exports.number().int().positive();
 var providerConfigs = external_exports.record(external_exports.string(), external_exports.record(external_exports.string(), external_exports.unknown()).optional());
+var loopbackWebSocketUrl = nonEmpty.refine((value) => {
+  try {
+    const url2 = new URL(value);
+    return url2.protocol === "ws:" && ["127.0.0.1", "localhost", "[::1]"].includes(url2.hostname);
+  } catch {
+    return false;
+  }
+}, "OBS WebSocket URL must use ws:// on loopback");
 var faceTimeAddress = nonEmpty.refine(
   (value) => {
     try {
@@ -14655,6 +14671,23 @@ var FaceTimeRealtimeConfigSchema = external_exports.object({
   toolPolicy: external_exports.enum(["none", "read-only", "owner"]).default("read-only").optional(),
   providers: providerConfigs.optional()
 }).strict();
+var FaceTimeAvatarConfigSchema = external_exports.object({
+  enabled: external_exports.boolean().default(false).optional(),
+  port: external_exports.number().int().min(1).max(65535).default(18794).optional(),
+  modelUrl: nonEmpty.optional(),
+  audioDelayMs: external_exports.number().int().min(0).max(500).default(80).optional(),
+  maxBufferedBytes: external_exports.number().int().min(65536).max(8 * 1024 * 1024).default(1048576).optional(),
+  obs: external_exports.object({
+    enabled: external_exports.boolean().default(false).optional(),
+    url: loopbackWebSocketUrl.default("ws://127.0.0.1:4455").optional(),
+    passwordEnv: external_exports.string().regex(/^[A-Z_][A-Z0-9_]*$/u).default("OBS_WEBSOCKET_PASSWORD").optional(),
+    sceneName: nonEmpty.default("OpenClaw FaceTime Avatar").optional(),
+    sourceName: nonEmpty.default("OpenClaw Avatar Renderer").optional(),
+    width: external_exports.number().int().min(320).max(3840).default(1280).optional(),
+    height: external_exports.number().int().min(240).max(2160).default(720).optional(),
+    autoStartVirtualCamera: external_exports.boolean().default(true).optional()
+  }).strict().optional()
+}).strict();
 var FaceTimeAccountConfigSchema = external_exports.lazy(
   () => external_exports.object({
     name: nonEmpty.optional(),
@@ -14667,6 +14700,7 @@ var FaceTimeAccountConfigSchema = external_exports.lazy(
     maxCallDurationMs: positiveMs.default(36e5).optional(),
     dialTimeoutMs: positiveMs.default(45e3).optional(),
     realtime: FaceTimeRealtimeConfigSchema.optional(),
+    avatar: FaceTimeAvatarConfigSchema.optional(),
     accounts: external_exports.record(external_exports.string(), FaceTimeAccountConfigSchema).optional(),
     defaultAccount: nonEmpty.optional()
   }).strict().superRefine((value, context) => {
@@ -14679,7 +14713,6 @@ var FaceTimeAccountConfigSchema = external_exports.lazy(
     }
   })
 );
-var FaceTimeConfigSchema = FaceTimeAccountConfigSchema;
 var realtimeJsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -14694,6 +14727,44 @@ var realtimeJsonSchema = {
     providers: {
       type: "object",
       additionalProperties: { type: "object", additionalProperties: true }
+    }
+  }
+};
+var avatarJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    enabled: { type: "boolean", default: false },
+    port: { type: "integer", minimum: 1, maximum: 65535, default: 18794 },
+    modelUrl: { type: "string", minLength: 1 },
+    audioDelayMs: { type: "integer", minimum: 0, maximum: 500, default: 80 },
+    maxBufferedBytes: {
+      type: "integer",
+      minimum: 65536,
+      maximum: 8388608,
+      default: 1048576
+    },
+    obs: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        enabled: { type: "boolean", default: false },
+        url: {
+          type: "string",
+          pattern: "^ws://(?:127\\.0\\.0\\.1|localhost|\\[::1\\])(?::[0-9]+)?(?:/.*)?$",
+          default: "ws://127.0.0.1:4455"
+        },
+        passwordEnv: {
+          type: "string",
+          pattern: "^[A-Z_][A-Z0-9_]*$",
+          default: "OBS_WEBSOCKET_PASSWORD"
+        },
+        sceneName: { type: "string", minLength: 1, default: "OpenClaw FaceTime Avatar" },
+        sourceName: { type: "string", minLength: 1, default: "OpenClaw Avatar Renderer" },
+        width: { type: "integer", minimum: 320, maximum: 3840, default: 1280 },
+        height: { type: "integer", minimum: 240, maximum: 2160, default: 720 },
+        autoStartVirtualCamera: { type: "boolean", default: true }
+      }
     }
   }
 };
@@ -14724,6 +14795,7 @@ var accountProperties = {
   maxCallDurationMs: { type: "integer", minimum: 1, default: 36e5 },
   dialTimeoutMs: { type: "integer", minimum: 1, default: 45e3 },
   realtime: realtimeJsonSchema,
+  avatar: avatarJsonSchema,
   accounts: { type: "object", additionalProperties: { $ref: "#" } },
   defaultAccount: { type: "string", minLength: 1 }
 };
@@ -14747,7 +14819,7 @@ var FaceTimeChannelConfigSchema = buildJsonChannelConfigSchema(
     cacheKey: "facetime-channel-config",
     runtime: {
       safeParse: (value) => {
-        const result = FaceTimeConfigSchema.safeParse(value);
+        const result = FaceTimeAccountConfigSchema.safeParse(value);
         if (result.success) {
           return { success: true, data: result.data };
         }
@@ -14814,7 +14886,7 @@ var faceTimeOnboardingAdapter = {
   channel: "facetime",
   getStatus: async ({ cfg }) => {
     const configured = listFaceTimeAccountIds(cfg).some(
-      (accountId) => Boolean(resolveFaceTimeAccountForStatus({ cfg, accountId }).identity)
+      (accountId) => Boolean(resolveFaceTimeAccount({ cfg, accountId }).identity)
     );
     return {
       channel: "facetime",
@@ -14842,7 +14914,7 @@ var faceTimeOnboardingAdapter = {
         defaultAccountId: resolveDefaultFaceTimeAccountId(cfg)
       });
     }
-    const current = resolveFaceTimeAccountForStatus({ cfg, accountId });
+    const current = resolveFaceTimeAccount({ cfg, accountId });
     await prompter.note(
       [
         "FaceTime must already be signed in on this Mac.",
@@ -14961,7 +15033,7 @@ function createFaceTimePluginBase() {
     configSchema: FaceTimeChannelConfigSchema,
     config: {
       listAccountIds: listFaceTimeAccountIds,
-      resolveAccount: (cfg, accountId) => resolveFaceTimeAccountForStatus({ cfg, accountId }),
+      resolveAccount: (cfg, accountId) => resolveFaceTimeAccount({ cfg, accountId }),
       defaultAccountId: resolveDefaultFaceTimeAccountId,
       setAccountEnabled: ({ cfg, accountId, enabled }) => setAccountEnabledInConfigSection({
         cfg,
@@ -14986,7 +15058,7 @@ function createFaceTimePluginBase() {
         helperPath: account.helperPath,
         blackHoleDevice: account.blackHoleDevice
       }),
-      resolveAllowFrom: ({ cfg, accountId }) => resolveFaceTimeAccountForStatus({ cfg, accountId }).config.allowFrom ?? [],
+      resolveAllowFrom: ({ cfg, accountId }) => resolveFaceTimeAccount({ cfg, accountId }).config.allowFrom ?? [],
       formatAllowFrom: ({ allowFrom }) => allowFrom.map((entry) => String(entry).trim()).filter(Boolean)
     },
     setup: {

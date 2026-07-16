@@ -38,6 +38,31 @@
           "providers": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true } }
         }
       },
+      "avatar": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean", "default": false },
+          "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 18794 },
+          "modelUrl": { "type": "string", "minLength": 1 },
+          "audioDelayMs": { "type": "integer", "minimum": 0, "maximum": 500, "default": 80 },
+          "maxBufferedBytes": { "type": "integer", "minimum": 65536, "maximum": 8388608, "default": 1048576 },
+          "obs": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean", "default": false },
+              "url": { "type": "string", "pattern": "^ws://(?:127\\.0\\.0\\.1|localhost|\\[::1\\])(?::[0-9]+)?(?:/.*)?$", "default": "ws://127.0.0.1:4455" },
+              "passwordEnv": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$", "default": "OBS_WEBSOCKET_PASSWORD" },
+              "sceneName": { "type": "string", "minLength": 1, "default": "OpenClaw FaceTime Avatar" },
+              "sourceName": { "type": "string", "minLength": 1, "default": "OpenClaw Avatar Renderer" },
+              "width": { "type": "integer", "minimum": 320, "maximum": 3840, "default": 1280 },
+              "height": { "type": "integer", "minimum": 240, "maximum": 2160, "default": 720 },
+              "autoStartVirtualCamera": { "type": "boolean", "default": true }
+            }
+          }
+        }
+      },
       "accounts": { "type": "object", "additionalProperties": { "$ref": "#" } },
       "defaultAccount": { "type": "string", "minLength": 1 }
     },
@@ -70,6 +95,31 @@
               "agentId": { "type": "string", "minLength": 1, "default": "main" },
               "toolPolicy": { "enum": ["none", "read-only", "owner"], "default": "read-only" },
               "providers": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true } }
+            }
+          },
+          "avatar": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean", "default": false },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 18794 },
+              "modelUrl": { "type": "string", "minLength": 1 },
+              "audioDelayMs": { "type": "integer", "minimum": 0, "maximum": 500, "default": 80 },
+              "maxBufferedBytes": { "type": "integer", "minimum": 65536, "maximum": 8388608, "default": 1048576 },
+              "obs": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": { "type": "boolean", "default": false },
+                  "url": { "type": "string", "pattern": "^ws://(?:127\\.0\\.0\\.1|localhost|\\[::1\\])(?::[0-9]+)?(?:/.*)?$", "default": "ws://127.0.0.1:4455" },
+                  "passwordEnv": { "type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$", "default": "OBS_WEBSOCKET_PASSWORD" },
+                  "sceneName": { "type": "string", "minLength": 1, "default": "OpenClaw FaceTime Avatar" },
+                  "sourceName": { "type": "string", "minLength": 1, "default": "OpenClaw Avatar Renderer" },
+                  "width": { "type": "integer", "minimum": 320, "maximum": 3840, "default": 1280 },
+                  "height": { "type": "integer", "minimum": 240, "maximum": 2160, "default": 720 },
+                  "autoStartVirtualCamera": { "type": "boolean", "default": true }
+                }
+              }
             }
           },
           "accounts": { "type": "object", "additionalProperties": { "$ref": "#" } },

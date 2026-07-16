@@ -11,7 +11,7 @@ import {
 import {
   listFaceTimeAccountIds,
   resolveDefaultFaceTimeAccountId,
-  resolveFaceTimeAccountForStatus,
+  resolveFaceTimeAccount,
 } from "./facetime/accounts.js";
 
 function readFaceTimeSection(cfg: OpenClawConfig): Record<string, unknown> {
@@ -73,7 +73,7 @@ export const faceTimeOnboardingAdapter: ChannelSetupWizardAdapter = {
   channel: "facetime",
   getStatus: async ({ cfg }) => {
     const configured = listFaceTimeAccountIds(cfg).some((accountId) =>
-      Boolean(resolveFaceTimeAccountForStatus({ cfg, accountId }).identity),
+      Boolean(resolveFaceTimeAccount({ cfg, accountId }).identity),
     );
     return {
       channel: "facetime",
@@ -103,7 +103,7 @@ export const faceTimeOnboardingAdapter: ChannelSetupWizardAdapter = {
         defaultAccountId: resolveDefaultFaceTimeAccountId(cfg),
       });
     }
-    const current = resolveFaceTimeAccountForStatus({ cfg, accountId });
+    const current = resolveFaceTimeAccount({ cfg, accountId });
     await prompter.note(
       [
         "FaceTime must already be signed in on this Mac.",
