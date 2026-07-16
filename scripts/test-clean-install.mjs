@@ -30,7 +30,7 @@ try {
   );
 
   const packed = JSON.parse(
-    run("npm", ["pack", "--pack-destination", temporaryRoot, "--json"]),
+    run("npm", ["pack", "--ignore-scripts", "--pack-destination", temporaryRoot, "--json"]),
   )[0];
   const tarball = path.join(temporaryRoot, packed.filename);
   run("npm", ["install", "--no-audit", "--no-fund", tarball], { cwd: consumerDir });
@@ -39,12 +39,11 @@ try {
   const helperPath = path.join(
     pluginPath,
     "native",
-    ".build",
-    "release",
+    "bin",
     "openclaw-facetime-bridge",
   );
   if (!fs.existsSync(helperPath)) {
-    throw new Error("Archive postinstall did not build the release native helper");
+    throw new Error("Archive does not contain the release native helper");
   }
 
   const isolatedEnv = {

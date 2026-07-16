@@ -16,13 +16,12 @@
   "scripts": {
     "build": "npm run build:plugin && npm run build:native",
     "build:plugin": "node scripts/build-plugin.mjs",
-    "build:native": "swift build --package-path native -c release",
+    "build:native": "swift build --package-path native -c release && mkdir -p native/bin && cp native/.build/release/openclaw-facetime-bridge native/bin/openclaw-facetime-bridge",
     "test:native": "swift build --package-path native && native/.build/debug/openclaw-facetime-bridge --self-test",
-    "prepare": "npm run build:plugin",
-    "postinstall": "npm run build:native",
+    "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:package": "node scripts/verify-package.mjs && node scripts/test-clean-install.mjs",
+    "test:package": "npm run build && node scripts/verify-package.mjs && node scripts/test-clean-install.mjs",
     "audit:dependencies": "npm audit --omit=dev --audit-level=high",
     "check": "npm run typecheck && npm run build && npm run test:native && npm run test",
     "check:release": "npm run check && npm run test:package && npm run audit:dependencies"
@@ -32,6 +31,9 @@
   },
   "os": [
     "darwin"
+  ],
+  "cpu": [
+    "arm64"
   ],
   "keywords": [
     "openclaw",

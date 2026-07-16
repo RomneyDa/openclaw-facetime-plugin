@@ -1,6 +1,6 @@
 export const FACETIME_CHANNEL_ID = "facetime" as const;
 export const FACETIME_DEFAULT_HELPER_RELATIVE_PATH =
-  "native/.build/release/openclaw-facetime-bridge";
+  "native/bin/openclaw-facetime-bridge";
 export const FACETIME_AUDIO_FORMAT = {
   encoding: "pcm16" as const,
   sampleRateHz: 24_000 as const,

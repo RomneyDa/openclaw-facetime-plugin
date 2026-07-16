@@ -30,7 +30,8 @@ control API; answer/dial/hangup use macOS Accessibility against FaceTime's UI.
 - macOS 13 or newer
 - FaceTime.app signed in to the identity dedicated to the agent
 - OpenClaw `>=2026.7.2-beta.1`
-- Xcode Command Line Tools (`xcode-select --install`) to build the Swift helper
+- Apple Silicon Mac (`arm64`); Intel is not claimed or packaged in the first release
+- Xcode Command Line Tools (`xcode-select --install`) only when building the Swift helper from source
 - [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole) as a required **system peer dependency**
 - Screen & System Audio Recording permission for the process that hosts OpenClaw
 - Accessibility permission for that same host process
@@ -57,7 +58,7 @@ For local development, clone and link the checkout:
 git clone https://github.com/RomneyDa/openclaw-facetime-plugin.git
 cd openclaw-facetime-plugin
 npm install
-npm run build:native
+npm run build
 openclaw plugins install --link "$PWD"
 ```
 
@@ -84,7 +85,7 @@ without changing the system output device.
 Run a read-only preflight through the native helper:
 
 ```bash
-native/.build/release/openclaw-facetime-bridge \
+native/bin/openclaw-facetime-bridge \
   --diagnose --device "BlackHole 2ch"
 ```
 

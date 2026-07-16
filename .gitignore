@@ -1,6 +1,5 @@
 .worktrees/
 node_modules/
 native/.build/
-dist/
 coverage/
 *.tgz

@@ -13,7 +13,7 @@ function run(command, args) {
   });
 }
 
-const pack = JSON.parse(run("npm", ["pack", "--dry-run", "--json"]))[0];
+const pack = JSON.parse(run("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"]))[0];
 const entries = pack.files.map((file) => file.path).sort();
 const required = [
   "ARCHITECTURE.md",
@@ -24,6 +24,7 @@ const required = [
   "dist/setup-entry.mjs",
   "index.ts",
   "native/Package.swift",
+  "native/bin/openclaw-facetime-bridge",
   "openclaw.plugin.json",
   "package.json",
   "setup-entry.ts",
@@ -33,6 +34,10 @@ for (const entry of required) {
   if (!entries.includes(entry)) {
     throw new Error(`Package is missing required entry: ${entry}`);
   }
+}
+const nativeHelper = path.join(root, "native", "bin", "openclaw-facetime-bridge");
+if ((fs.statSync(nativeHelper).mode & 0o111) === 0) {
+  throw new Error("Packaged native helper is not executable");
 }
 const forbidden = entries.filter((entry) =>
   /(^|\/)(?:node_modules|tmp|coverage|\.git|\.worktrees)(?:\/|$)|\.test\.[cm]?[jt]s$|native\/\.build\//u.test(

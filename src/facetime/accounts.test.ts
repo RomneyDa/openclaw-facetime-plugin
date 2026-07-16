@@ -28,6 +28,6 @@ describe("FaceTime accounts", () => {
     const account = resolveFaceTimeAccount({ cfg, accountId: "support", cwd: "/tmp/plugin" });
     expect(account.identity).toBe("+14155550123");
     expect(account.config.realtime).toMatchObject({ provider: "openai", agentId: "support" });
-    expect(account.helperPath).toBe("/tmp/plugin/native/.build/release/openclaw-facetime-bridge");
+    expect(account.helperPath).toBe("/tmp/plugin/native/bin/openclaw-facetime-bridge");
   });
 });
