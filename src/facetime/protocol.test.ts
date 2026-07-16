@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  decodeFaceTimeEvent,
   encodeFaceTimeFrame,
   FACETIME_FRAME_AUDIO,
   FACETIME_FRAME_JSON,
@@ -32,5 +33,15 @@ describe("FaceTime framed IPC", () => {
   it("rejects unknown frame kinds", () => {
     const decoder = new FaceTimeFrameDecoder();
     expect(() => decoder.push(Buffer.from([99, 0, 0, 0, 0]))).toThrow(/Invalid/);
+  });
+
+  it("rejects malformed and unknown native events", () => {
+    expect(() => decodeFaceTimeEvent(Buffer.from("{"))).toThrow(/not valid JSON/);
+    expect(() => decodeFaceTimeEvent(Buffer.from('{"type":"surprise"}'))).toThrow(
+      /Invalid FaceTime native event/,
+    );
+    expect(() =>
+      decodeFaceTimeEvent(Buffer.from('{"type":"ready","pid":"not-a-number"}')),
+    ).toThrow(/Invalid FaceTime native event/);
   });
 });

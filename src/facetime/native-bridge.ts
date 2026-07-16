@@ -13,6 +13,7 @@ import type { FaceTimeNativeCommand, FaceTimeNativeEvent } from "./types.js";
 
 const MAX_QUEUED_OUTPUT_BYTES = 2 * 1024 * 1024;
 const SHUTDOWN_GRACE_MS = 1_500;
+const STARTUP_TIMEOUT_MS = 5_000;
 
 export type FaceTimeNativeBridgeEvents = {
   event: [event: FaceTimeNativeEvent];
@@ -24,16 +25,25 @@ export type FaceTimeNativeBridgeEvents = {
 export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvents> {
   readonly helperPath: string;
   readonly logger: RuntimeLogger;
+  readonly maxQueuedOutputBytes: number;
+  readonly startupTimeoutMs: number;
   #child: ChildProcessWithoutNullStreams | null = null;
   #decoder = new FaceTimeFrameDecoder();
   #queued: Buffer[] = [];
   #queuedBytes = 0;
   #stopping = false;
 
-  constructor(params: { helperPath: string; logger: RuntimeLogger }) {
+  constructor(params: {
+    helperPath: string;
+    logger: RuntimeLogger;
+    maxQueuedOutputBytes?: number;
+    startupTimeoutMs?: number;
+  }) {
     super();
     this.helperPath = params.helperPath;
     this.logger = params.logger;
+    this.maxQueuedOutputBytes = params.maxQueuedOutputBytes ?? MAX_QUEUED_OUTPUT_BYTES;
+    this.startupTimeoutMs = params.startupTimeoutMs ?? STARTUP_TIMEOUT_MS;
   }
 
   get running(): boolean {
@@ -89,7 +99,13 @@ export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvent
         this.emit("error", error);
       }
     });
-    this.sendCommand(command);
+    try {
+      await this.#waitUntilReady();
+      this.sendCommand(command);
+    } catch (error) {
+      await this.stop();
+      throw error;
+    }
   }
 
   sendCommand(command: FaceTimeNativeCommand): void {
@@ -101,35 +117,68 @@ export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvent
       return false;
     }
     try {
-      this.#write(encodeFaceTimeFrame(FACETIME_FRAME_AUDIO, audio), false);
-      return true;
+      return this.#write(encodeFaceTimeFrame(FACETIME_FRAME_AUDIO, audio), false);
     } catch (error) {
       this.emit("error", error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   }
 
-  #write(frame: Buffer, control: boolean): void {
+  #write(frame: Buffer, control: boolean): boolean {
     const child = this.#child;
     if (!child || !this.running) {
       throw new Error("FaceTime native helper is not running");
     }
     if (this.#queued.length > 0) {
-      this.#enqueue(frame, control);
-      return;
+      return this.#enqueue(frame, control);
     }
     if (!child.stdin.write(frame)) {
       this.#queued.push(Buffer.alloc(0));
     }
+    return true;
   }
 
-  #enqueue(frame: Buffer, control: boolean): void {
-    if (!control && this.#queuedBytes + frame.byteLength > MAX_QUEUED_OUTPUT_BYTES) {
+  #enqueue(frame: Buffer, control: boolean): boolean {
+    if (!control && this.#queuedBytes + frame.byteLength > this.maxQueuedOutputBytes) {
       this.logger.warn?.("[facetime-native] dropped provider audio because BlackHole output is backpressured");
-      return;
+      return false;
     }
     this.#queued.push(frame);
     this.#queuedBytes += frame.byteLength;
+    return true;
+  }
+
+  async #waitUntilReady(): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off("event", onEvent);
+        this.off("error", onError);
+        this.off("exit", onExit);
+      };
+      const onEvent = (event: FaceTimeNativeEvent) => {
+        if (event.type === "ready") {
+          cleanup();
+          resolve();
+        }
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        cleanup();
+        reject(new Error(`FaceTime native helper exited before ready (${code ?? signal ?? "unknown"})`));
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`FaceTime native helper did not become ready within ${this.startupTimeoutMs}ms`));
+      }, this.startupTimeoutMs);
+      timer.unref?.();
+      this.on("event", onEvent);
+      this.on("error", onError);
+      this.on("exit", onExit);
+    });
   }
 
   #flush(): void {

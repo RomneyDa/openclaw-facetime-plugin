@@ -24,7 +24,6 @@ export function createFaceTimePluginBase(): ChannelPlugin<ResolvedFaceTimeAccoun
       selectionLabel: "FaceTime Audio (macOS)",
       docsPath: "/channels/facetime",
       blurb: "Answer and place FaceTime Audio calls through a realtime voice agent on this Mac.",
-      aliases: ["facetime-audio"],
       showInSetup: true,
       quickstartAllowFrom: true,
     },

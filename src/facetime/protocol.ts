@@ -1,10 +1,41 @@
 import type { FaceTimeNativeCommand, FaceTimeNativeEvent } from "./types.js";
+import { z } from "zod";
 
 export const FACETIME_FRAME_JSON = 1;
 export const FACETIME_FRAME_AUDIO = 2;
 export const FACETIME_FRAME_HEADER_BYTES = 5;
 export const FACETIME_MAX_CONTROL_FRAME_BYTES = 256 * 1024;
 export const FACETIME_MAX_AUDIO_FRAME_BYTES = 256 * 1024;
+
+const nativeCheckSchema = z.object({
+  id: z.string().min(1),
+  ok: z.boolean(),
+  message: z.string(),
+});
+
+const nativeEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("ready"), pid: z.number().int().positive() }),
+  z.object({
+    type: z.literal("incoming"),
+    callId: z.string().min(1),
+    peer: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("call-state"),
+    callId: z.string().min(1),
+    state: z.enum(["ringing", "dialing", "connecting", "connected", "ended", "failed"]),
+    peer: z.string().min(1).optional(),
+    reason: z.string().optional(),
+  }),
+  z.object({ type: z.literal("audio-cleared"), callId: z.string().min(1).optional() }),
+  z.object({
+    type: z.literal("error"),
+    code: z.string().min(1),
+    message: z.string(),
+    fatal: z.boolean().optional(),
+  }),
+  z.object({ type: z.literal("diagnostics"), checks: z.array(nativeCheckSchema) }),
+]);
 
 export type FaceTimeFrame =
   | { kind: typeof FACETIME_FRAME_JSON; payload: Buffer }
@@ -27,11 +58,19 @@ export function encodeFaceTimeCommand(command: FaceTimeNativeCommand): Buffer {
 }
 
 export function decodeFaceTimeEvent(payload: Buffer): FaceTimeNativeEvent {
-  const parsed: unknown = JSON.parse(payload.toString("utf8"));
-  if (!parsed || typeof parsed !== "object" || typeof (parsed as { type?: unknown }).type !== "string") {
-    throw new Error("FaceTime native event is missing type");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload.toString("utf8"));
+  } catch {
+    throw new Error("FaceTime native event is not valid JSON");
   }
-  return parsed as FaceTimeNativeEvent;
+  const result = nativeEventSchema.safeParse(parsed);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue?.path.length ? ` at ${issue.path.join(".")}` : "";
+    throw new Error(`Invalid FaceTime native event${path}: ${issue?.message ?? "unknown error"}`);
+  }
+  return result.data;
 }
 
 export class FaceTimeFrameDecoder {

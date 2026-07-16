@@ -56,11 +56,40 @@ export class FaceTimeCallManager {
   #active: FaceTimeCallSnapshot | null = null;
   #recent: FaceTimeCallSnapshot[] = [];
   #realtime: RealtimeVoiceBridgeSession | null = null;
+  #realtimeStarting: Promise<void> | null = null;
   #maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
+  #dialTimer: ReturnType<typeof setTimeout> | null = null;
   #pendingSpeech: string | null = null;
   #started = false;
   #stopping = false;
   readonly #startRealtime: typeof startFaceTimeRealtimeSession;
+  readonly #onBridgeEvent = (event: FaceTimeNativeEvent) => {
+    void this.#handleNativeEvent(event).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn?.(`[facetime] native event handling failed: ${message}`);
+      if (this.#active) {
+        void this.#finishCall("failed", message);
+      }
+    });
+  };
+  readonly #onBridgeAudio = (audio: Buffer) => {
+    if (this.#active?.state !== "connected" || !this.#realtime) {
+      return;
+    }
+    this.#active.inputBytes += audio.byteLength;
+    this.#realtime.sendAudio(audio);
+  };
+  readonly #onBridgeError = (error: Error) => {
+    this.logger.warn?.(`[facetime] native bridge error: ${error.message}`);
+    if (this.#active) {
+      void this.#finishCall("failed", error.message);
+    }
+  };
+  readonly #onBridgeExit = () => {
+    if (!this.#stopping && this.#active) {
+      void this.#finishCall("failed", "native helper exited");
+    }
+  };
 
   constructor(params: {
     account: ResolvedFaceTimeAccount;
@@ -90,33 +119,25 @@ export class FaceTimeCallManager {
     if (!this.account.identity) {
       throw new Error(`FaceTime identity is not configured for account ${this.account.accountId}`);
     }
+    this.#stopping = false;
     this.#started = true;
-    this.bridge.on("event", (event) => void this.#handleNativeEvent(event));
-    this.bridge.on("audio", (audio) => {
-      if (this.#active?.state !== "connected" || !this.#realtime) {
-        return;
-      }
-      this.#active.inputBytes += audio.byteLength;
-      this.#realtime.sendAudio(audio);
-    });
-    this.bridge.on("error", (error) => {
-      this.logger.warn?.(`[facetime] native bridge error: ${error.message}`);
-      if (this.#active) {
-        void this.#finishCall("failed", error.message);
-      }
-    });
-    this.bridge.on("exit", () => {
-      if (!this.#stopping && this.#active) {
-        void this.#finishCall("failed", "native helper exited");
-      }
-    });
-    await this.bridge.start({
-      type: "configure",
-      identity: this.account.identity,
-      blackHoleDevice: this.account.blackHoleDevice,
-      sampleRateHz: 24_000,
-      channels: 1,
-    });
+    this.bridge.on("event", this.#onBridgeEvent);
+    this.bridge.on("audio", this.#onBridgeAudio);
+    this.bridge.on("error", this.#onBridgeError);
+    this.bridge.on("exit", this.#onBridgeExit);
+    try {
+      await this.bridge.start({
+        type: "configure",
+        identity: this.account.identity,
+        blackHoleDevice: this.account.blackHoleDevice,
+        sampleRateHz: 24_000,
+        channels: 1,
+      });
+    } catch (error) {
+      this.#started = false;
+      this.#detachBridgeListeners();
+      throw error;
+    }
     signal?.addEventListener("abort", () => void this.stop(), { once: true });
   }
 
@@ -133,6 +154,19 @@ export class FaceTimeCallManager {
     const call = this.#createCall("outbound", peer, "dialing");
     this.#pendingSpeech = initialSpeech?.trim() || null;
     this.bridge.sendCommand({ type: "dial", callId: call.id, target: peer });
+    this.#dialTimer = setTimeout(() => {
+      if (this.#active?.id !== call.id || this.#active.state === "connected") {
+        return;
+      }
+      this.logger.info(`[facetime] ending ${call.id}: dial timed out`);
+      try {
+        this.bridge.sendCommand({ type: "hangup", callId: call.id });
+      } catch {
+        // Helper failure is reflected in the terminal call state below.
+      }
+      void this.#finishCall("failed", "dial timed out");
+    }, this.account.config.dialTimeoutMs ?? 45_000);
+    this.#dialTimer.unref?.();
     return { ...call };
   }
 
@@ -204,8 +238,12 @@ export class FaceTimeCallManager {
       }
       await this.#finishCall("ended", "gateway shutdown");
     }
-    await this.bridge.stop();
-    this.#started = false;
+    try {
+      await this.bridge.stop();
+    } finally {
+      this.#detachBridgeListeners();
+      this.#started = false;
+    }
   }
 
   #assertAvailable(): void {
@@ -274,6 +312,10 @@ export class FaceTimeCallManager {
       }
       call.state = event.state;
       if (event.state === "connected") {
+        if (this.#dialTimer) {
+          clearTimeout(this.#dialTimer);
+          this.#dialTimer = null;
+        }
         call.connectedAt ??= nowIso();
         await this.#connectRealtime(call);
       } else if (event.state === "ended" || event.state === "failed") {
@@ -314,13 +356,32 @@ export class FaceTimeCallManager {
     if (this.#realtime) {
       return;
     }
+    if (this.#realtimeStarting) {
+      await this.#realtimeStarting;
+      if (this.#realtime || this.#active?.id !== call.id) {
+        return;
+      }
+    }
+    this.#realtimeStarting = this.#startRealtimeForCall(call);
+    try {
+      await this.#realtimeStarting;
+    } finally {
+      this.#realtimeStarting = null;
+    }
+  }
+
+  async #startRealtimeForCall(call: FaceTimeCallSnapshot): Promise<void> {
     this.#maxDurationTimer = setTimeout(() => {
       this.logger.info(`[facetime] ending ${call.id}: maximum call duration reached`);
-      void this.hangup(call.id);
+      void this.hangup(call.id).catch((error) => {
+        this.logger.warn?.(
+          `[facetime] maximum-duration hangup failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
     }, this.account.config.maxCallDurationMs ?? 3_600_000);
     this.#maxDurationTimer.unref?.();
     try {
-      this.#realtime = await this.#startRealtime({
+      const realtime = await this.#startRealtime({
         cfg: this.cfg,
         runtime: this.runtime,
         logger: this.logger,
@@ -333,7 +394,9 @@ export class FaceTimeCallManager {
           this.logger.info(`[facetime] realtime provider ready: ${providerId}`);
         },
         onOutputAudio: (bytes) => {
-          call.outputBytes += bytes;
+          if (this.#active?.id === call.id) {
+            call.outputBytes += bytes;
+          }
         },
         onTranscript: (role, text, final) => {
           if (final) {
@@ -346,6 +409,11 @@ export class FaceTimeCallManager {
           }
         },
       });
+      if (this.#active?.id !== call.id || this.#active.state !== "connected") {
+        realtime.close();
+        return;
+      }
+      this.#realtime = realtime;
       const pendingSpeech = this.#pendingSpeech;
       this.#pendingSpeech = null;
       if (pendingSpeech && this.#active?.id === call.id) {
@@ -353,8 +421,14 @@ export class FaceTimeCallManager {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.bridge.sendCommand({ type: "hangup", callId: call.id });
-      await this.#finishCall("failed", `realtime startup failed: ${message}`);
+      if (this.#active?.id === call.id) {
+        try {
+          this.bridge.sendCommand({ type: "hangup", callId: call.id });
+        } catch {
+          // The native failure is already represented by the terminal call state.
+        }
+        await this.#finishCall("failed", `realtime startup failed: ${message}`);
+      }
     }
   }
 
@@ -366,6 +440,10 @@ export class FaceTimeCallManager {
     if (this.#maxDurationTimer) {
       clearTimeout(this.#maxDurationTimer);
       this.#maxDurationTimer = null;
+    }
+    if (this.#dialTimer) {
+      clearTimeout(this.#dialTimer);
+      this.#dialTimer = null;
     }
     const realtime = this.#realtime;
     this.#realtime = null;
@@ -386,6 +464,13 @@ export class FaceTimeCallManager {
     this.#recent = this.#recent.slice(0, 10);
     this.#active = null;
     this.logger.info(`[facetime] call ${call.id} ${state}${reason ? `: ${reason}` : ""}`);
+  }
+
+  #detachBridgeListeners(): void {
+    this.bridge.off("event", this.#onBridgeEvent);
+    this.bridge.off("audio", this.#onBridgeAudio);
+    this.bridge.off("error", this.#onBridgeError);
+    this.bridge.off("exit", this.#onBridgeExit);
   }
 }
 
