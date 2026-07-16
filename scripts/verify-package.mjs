@@ -9,11 +9,29 @@ function run(command, args) {
   return execFileSync(command, args, {
     cwd: root,
     encoding: "utf8",
+    env: { ...process.env, NPM_CONFIG_IGNORE_SCRIPTS: "true" },
     stdio: ["ignore", "pipe", "inherit"],
   });
 }
 
-const pack = JSON.parse(run("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"]))[0];
+function parseFinalJsonArray(output) {
+  const starts = [...output.matchAll(/^\[/gmu)].map((match) => match.index ?? 0);
+  for (const start of starts.reverse()) {
+    try {
+      const value = JSON.parse(output.slice(start));
+      if (Array.isArray(value)) {
+        return value;
+      }
+    } catch {
+      // npm and lifecycle tools may have written non-JSON status lines before the final payload.
+    }
+  }
+  throw new Error("npm pack did not emit a JSON array");
+}
+
+const pack = parseFinalJsonArray(
+  run("npm", ["pack", "--dry-run", "--ignore-scripts", "--json", "--silent"]),
+)[0];
 const entries = pack.files.map((file) => file.path).sort();
 const required = [
   "ARCHITECTURE.md",
