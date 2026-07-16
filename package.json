@@ -5,6 +5,14 @@
   "type": "module",
   "main": "index.ts",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RomneyDa/openclaw-facetime-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RomneyDa/openclaw-facetime-plugin/issues"
+  },
+  "homepage": "https://github.com/RomneyDa/openclaw-facetime-plugin#readme",
   "scripts": {
     "build:native": "swift build --package-path native -c release",
     "test:native": "swift build --package-path native && native/.build/debug/openclaw-facetime-bridge --self-test",

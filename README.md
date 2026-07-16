@@ -43,9 +43,19 @@ Install BlackHole and reboot before continuing:
 brew install blackhole-2ch
 ```
 
-## Install from this checkout
+## Install
+
+Install the public GitHub repository after completing the system requirements above:
 
 ```bash
+openclaw plugins install git:github.com/RomneyDa/openclaw-facetime-plugin@main
+```
+
+For local development, clone and link the checkout:
+
+```bash
+git clone https://github.com/RomneyDa/openclaw-facetime-plugin.git
+cd openclaw-facetime-plugin
 npm install
 npm run build:native
 openclaw plugins install --link "$PWD"
