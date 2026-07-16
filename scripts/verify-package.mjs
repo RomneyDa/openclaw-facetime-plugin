@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parseFinalNpmJsonArray } from "./parse-npm-json.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -14,22 +15,7 @@ function run(command, args) {
   });
 }
 
-function parseFinalJsonArray(output) {
-  const starts = [...output.matchAll(/^\[/gmu)].map((match) => match.index ?? 0);
-  for (const start of starts.reverse()) {
-    try {
-      const value = JSON.parse(output.slice(start));
-      if (Array.isArray(value)) {
-        return value;
-      }
-    } catch {
-      // npm and lifecycle tools may have written non-JSON status lines before the final payload.
-    }
-  }
-  throw new Error("npm pack did not emit a JSON array");
-}
-
-const pack = parseFinalJsonArray(
+const pack = parseFinalNpmJsonArray(
   run("npm", ["pack", "--dry-run", "--ignore-scripts", "--json", "--silent"]),
 )[0];
 const entries = pack.files.map((file) => file.path).sort();

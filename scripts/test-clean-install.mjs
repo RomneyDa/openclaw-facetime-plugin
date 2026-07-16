@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parseFinalNpmJsonArray } from "./parse-npm-json.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-facetime-install-"));
@@ -29,8 +30,12 @@ try {
     JSON.stringify({ name: "facetime-install-fixture", private: true }),
   );
 
-  const packed = JSON.parse(
-    run("npm", ["pack", "--ignore-scripts", "--pack-destination", temporaryRoot, "--json"]),
+  const packed = parseFinalNpmJsonArray(
+    run(
+      "npm",
+      ["pack", "--ignore-scripts", "--pack-destination", temporaryRoot, "--json", "--silent"],
+      { env: { ...process.env, NPM_CONFIG_IGNORE_SCRIPTS: "true" } },
+    ),
   )[0];
   const tarball = path.join(temporaryRoot, packed.filename);
   run("npm", ["install", "--no-audit", "--no-fund", tarball], { cwd: consumerDir });
