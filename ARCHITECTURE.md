@@ -36,6 +36,13 @@ index.ts / setup-entry.ts
             registered OpenClaw realtime provider
             createRealtimeVoiceBridgeSession
             openclaw_agent_consult
+            -> facetime/output-pacer.ts
+                 bounded configurable BlackHole delay
+                 atomic native/avatar clear
+                 -> avatar/runtime.ts
+                      loopback authenticated PCM server
+                      HeadAudio + TalkingHead browser bundle
+                      optional authenticated OBS scene/virtual camera
 ```
 
 The Swift process never receives OpenAI credentials. The TypeScript plugin never imports private
@@ -63,6 +70,22 @@ silently dropped.
 - OpenClaw's realtime provider must advertise PCM16 24 kHz support.
 - Output is scheduled through AVAudioEngine whose HAL output device is `BlackHole 2ch`.
 - Provider barge-in invokes `clear-audio`, which resets the AVAudioPlayerNode queue.
+- When the avatar is enabled, a bounded A/V pacer sends PCM to the renderer immediately and delays
+  BlackHole by `audioDelayMs` (80 ms by default). Clearing the pacer cancels delayed chunks and clears
+  both sinks atomically.
+
+## Avatar contract
+
+- The renderer binds only `127.0.0.1` and authenticates WebSocket upgrades with a random token.
+- Per-client buffered output defaults to 1 MiB; disconnected or slow renderers increment drop
+  counters rather than applying backpressure to the call.
+- HeadAudio performs local audio-driven viseme inference. The built-in procedural preset requires no
+  likeness asset; an optional CORS-enabled TalkingHead GLB may drive Oculus viseme blend shapes.
+- Browser audio terminates at HeadAudio's zero-output AudioWorklet and is never connected to the
+  physical output device.
+- OBS credentials are read from an environment variable. Control is restricted to loopback, creates
+  a dedicated scene/browser source, and verifies that Virtual Camera actually became active.
+- Renderer/OBS failures are reported as degraded status and do not terminate the audio call.
 
 ## Lifecycle invariants
 
@@ -74,3 +97,4 @@ silently dropped.
 6. Any native/realtime fatal error hangs up and releases local call state.
 7. Gateway abort hangs up, closes realtime, stops ScreenCaptureKit/BlackHole, and terminates the helper.
 8. No raw audio is persisted by this plugin.
+9. Virtual Camera starts only for a connected call and stops with that call.

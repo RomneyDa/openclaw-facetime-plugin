@@ -1,6 +1,7 @@
 # openclaw-facetime-plugin
 
-A macOS-only FaceTime Audio channel for [OpenClaw](https://github.com/openclaw/openclaw).
+A macOS-only FaceTime Audio channel for [OpenClaw](https://github.com/openclaw/openclaw), with an
+optional local audio-driven avatar and OBS Virtual Camera output.
 The signed-in Mac is the call endpoint and audio bridge:
 
 ```text
@@ -111,6 +112,19 @@ in; the live smoke test below proves that boundary.
         "agentId": "main",
         "toolPolicy": "read-only",
         "greeting": "Hello! How can I help?"
+      },
+      "avatar": {
+        "enabled": true,
+        "audioDelayMs": 80,
+        "port": 18794,
+        "obs": {
+          "enabled": true,
+          "url": "ws://127.0.0.1:4455",
+          "passwordEnv": "OBS_WEBSOCKET_PASSWORD",
+          "sceneName": "OpenClaw FaceTime Avatar",
+          "sourceName": "OpenClaw Avatar Renderer",
+          "autoStartVirtualCamera": true
+        }
       }
     }
   }
@@ -121,6 +135,40 @@ in; the live smoke test below proves that boundary.
 OpenClaw realtime provider owns its current defaults. Provider-specific configuration can be placed
 under `realtime.providers.<provider>`; for OpenAI, prefer the host's configured auth profile or
 `OPENAI_API_KEY` over plaintext configuration.
+
+## Optional video avatar
+
+The default renderer is a bundled procedural preset driven by
+[HeadAudio](https://github.com/met4citizen/HeadAudio) 0.1.0. It consumes the same PCM16 24 kHz
+provider chunks as BlackHole, runs entirely in a browser AudioWorklet, and has no audible browser
+output. Set `avatar.modelUrl` to a CORS-enabled TalkingHead-compatible GLB to replace the preset with
+[TalkingHead](https://github.com/met4citizen/TalkingHead) 1.7.0. The GLB must have its own valid
+redistribution rights; this repository does not bundle a third-party likeness.
+
+The loopback renderer requires an unguessable per-process token and bounds each WebSocket client.
+`audioDelayMs` delays BlackHole by 80 ms by default to compensate for HeadAudio's processing window.
+Barge-in, hangup, and provider cancellation clear delayed BlackHole chunks and renderer state in one
+operation. Avatar failure degrades to audio-only calling.
+
+Preview the renderer with synthetic PCM:
+
+```bash
+npm run avatar:preview
+```
+
+For FaceTime video output:
+
+1. Install OBS: `brew install --cask obs`.
+2. In OBS, enable **Tools → WebSocket Server Settings → Enable WebSocket server** and keep
+   authentication enabled.
+3. Export its password to the Gateway process as `OBS_WEBSOCKET_PASSWORD`.
+4. On first use, approve **System Settings → General → Login Items & Extensions → Camera
+   Extensions → OBS Virtual Camera**, then restart OBS.
+5. Enable `avatar.obs` as shown above. The plugin creates only its dedicated scene/source, switches
+   to that scene, starts the virtual camera when a call connects, and stops it when the call ends.
+
+OBS connection or Camera Extension errors appear in `facetime_call` status while audio remains
+available. OBS's browser source is configured with audio rerouting disabled to prevent echo.
 
 ### Inbound policy
 
@@ -202,6 +250,7 @@ FaceTime account.
   persisted by OpenClaw's normal agent/session store.
 - Caller identity is derived from FaceTime's Accessibility labels. With the default allowlist,
   missing or unrecognized identity fails closed.
+- Phone/email values are hashed before logging or being placed in consult session keys.
 - Native control frames and audio frames are size-bounded. Provider output is dropped under sustained
   BlackHole backpressure instead of growing memory without bound.
 - Setup/status/preflight do not place calls, change provider state, or request permissions.
@@ -214,7 +263,8 @@ FaceTime account.
   headless macOS login where FaceTime and Accessibility UI are unavailable.
 - Caller identity quality depends on what FaceTime exposes to Accessibility. Test contacts, raw phone
   numbers, and Apple Account emails used by the intended allowlist.
-- Video and group calls are intentionally out of scope.
+- FaceTime selection of `OBS Virtual Camera` and remote video-call proof still require the live
+  signed-in-account test. Group calls remain out of scope.
 
 ## Development
 
@@ -222,8 +272,9 @@ FaceTime account.
 npm run typecheck
 npm test
 npm run test:native
-npm run build:native
-npm pack --dry-run
+npm run build
+npm run check:release
+npm run avatar:preview
 ```
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the channel/runtime boundary and design provenance.

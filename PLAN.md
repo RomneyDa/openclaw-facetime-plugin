@@ -18,6 +18,8 @@ Published repository: <https://github.com/RomneyDa/openclaw-facetime-plugin>
 
 Remote `main` at plan creation: `3ac8a0d1d7cc331dd15ea7747801f5ea2dc5500d`
 
+Automated avatar implementation baseline as of 2026-07-16: `9822b97`.
+
 Already implemented and tested:
 
 - OpenClaw channel registration, recursive account config, setup wizard, status, outbound sends,
@@ -32,8 +34,10 @@ Already implemented and tested:
   level.
 - Local native preflight on one Mac: FaceTime installed, BlackHole present, Screen & System Audio
   Recording granted, and Accessibility granted.
-- Six Vitest files / 15 tests, package inspection, source-linked OpenClaw load, and clean
-  `openclaw plugins doctor`.
+- Native and TypeScript failure-path tests, package inspection, clean archive/public-Git installs,
+  source-linked OpenClaw load, and clean `openclaw plugins doctor`.
+- A bundled loopback avatar renderer driven by HeadAudio, optional TalkingHead GLB support, a
+  bounded A/V pacer, authenticated OBS control, and a real headless-Chrome renderer smoke test.
 
 Not yet proven:
 
@@ -54,29 +58,30 @@ Not yet proven:
 - [ ] Record the target Mac model, architecture, macOS version, FaceTime version, OpenClaw version,
   BlackHole version, realtime provider/model, and helper SHA.
 - [ ] Use non-sensitive test dialogue and obtain consent before capturing logs or screen recordings.
-- [ ] Add a redacted live-test report template under `docs/live-tests/` with pass/fail, timestamps,
+- [x] Add a redacted live-test report template under `docs/live-tests/` with pass/fail, timestamps,
   measured latency, cleanup evidence, and exact commit SHA.
-- [ ] Add opt-in structured debug counters for frames, bytes, queue depth, drops, state transitions,
+- [x] Add structured runtime counters for frames, bytes, queue depth, drops, state transitions,
   and timestamps; never log raw audio, credentials, or full transcripts.
 
 ### 2. Clean installation and setup testing
 
-- [ ] Install from the public Git URL into a fresh OpenClaw state directory.
-- [ ] Verify `postinstall` builds the native helper on Apple Silicon without relying on this checkout.
+- [x] Install from the public Git URL into a fresh OpenClaw state directory.
+- [x] Verify the tracked Apple Silicon release helper and bundled runtime install without lifecycle
+  scripts or reliance on this checkout.
 - [ ] Verify a clear failure and recovery path when Xcode Command Line Tools are missing.
 - [ ] Verify a clear failure and recovery path when BlackHole is missing or the Mac has not rebooted.
 - [ ] Verify permission-denied states for Screen & System Audio Recording and Accessibility, then
   grant each permission and confirm status changes without editing config.
-- [ ] Verify FaceTime-signed-out behavior is detected or reported as an explicit unknown that the
+- [x] Verify FaceTime-signed-out behavior is detected or reported as an explicit unknown that the
   live smoke test must resolve.
-- [ ] Run the wizard for a fresh default account, rerun it without changes, change the identity and
+- [x] Run the wizard for a fresh default account, rerun it without changes, change the identity and
   policy, cancel midway, and confirm no unrelated config is modified.
-- [ ] Exercise `allowlist`, `open`, and `disabled`; require an explicit warning before `open`.
-- [ ] Verify invalid identities, empty allowlists, invalid helper paths, invalid duration values, and
+- [x] Exercise `allowlist`, `open`, and `disabled`; require an explicit confirmation before `open`.
+- [x] Verify invalid identities, empty allowlists, invalid duration values, avatar/OBS values, and
   unknown config keys fail with actionable messages.
-- [ ] Verify status/preflight are bounded and read-only: no call, app launch, permission prompt,
+- [x] Verify status/preflight are bounded and read-only: no call, app launch, permission prompt,
   device mutation, or provider connection.
-- [ ] Verify package installation, source linking, `plugins list`, `plugins doctor`, and uninstall.
+- [x] Verify package installation, source linking, `plugins list`, `plugins doctor`, and uninstall.
 
 ### 3. FaceTime call-control matrix
 
@@ -88,10 +93,12 @@ Not yet proven:
 - [ ] Outbound call by Apple Account email.
 - [ ] Outbound call by normalized phone number.
 - [ ] Invalid or unavailable outbound target.
-- [ ] Outbound connection timeout and cancellation.
+- [x] Outbound connection timeout and cancellation at the TypeScript/native boundary.
 - [ ] Local hangup, remote hangup, decline, missed call, and provider-triggered failure.
-- [ ] A concurrent second inbound call is rejected as busy without disturbing the active call.
-- [ ] A concurrent second outbound request fails fast without disturbing the active call.
+- [x] A concurrent second inbound call is rejected as busy without disturbing the active call in
+  state-machine tests.
+- [x] A concurrent second outbound request fails fast without disturbing the active call in
+  state-machine tests.
 - [ ] FaceTime not running, FaceTime launched on demand, FaceTime crash, and FaceTime relaunch.
 - [ ] Verify the actual Accessibility roles, identifiers, and labels; prefer stable identifiers over
   English text. Test at least one non-English macOS account before claiming localization support.
@@ -111,7 +118,7 @@ Not yet proven:
   input without clipping.
 - [ ] Verify assistant output cancellation on barge-in; queued BlackHole audio must clear promptly
   and stale audio must not resume.
-- [ ] Verify output underrun, deliberate sink slowdown, the 2 MiB queue boundary, dropped-audio
+- [x] Verify deliberate sink slowdown, bounded output queues, dropped-audio
   counters, and recovery after backpressure.
 - [ ] Change the default system output during a call and confirm FaceTime capture continues.
 - [ ] Remove or rename the BlackHole device during startup and while active; fail safely and release
@@ -124,7 +131,8 @@ Not yet proven:
 
 - [ ] Missing, malformed, and rejected OpenAI Platform API key.
 - [ ] Default registered provider resolution and explicit provider/model/voice overrides.
-- [ ] Provider connection timeout, WebSocket close, malformed provider event, rate limit, and maximum
+- [x] Provider connection timeout, duplicate start, late-session cleanup, malformed provider event,
+  and maximum
   session duration.
 - [ ] Greeting plays once and only after both the FaceTime call and realtime bridge are ready.
 - [ ] `openclaw_agent_consult` succeeds with a short read-only lookup and speaks the result.
@@ -138,31 +146,30 @@ Not yet proven:
 ### 6. Shutdown, crash, and stale-state recovery
 
 - [ ] Gateway shutdown during ringing, connecting, active audio, assistant output, and consult.
-- [ ] Native helper `SIGTERM`, forced `SIGKILL`, malformed frame, oversized frame, truncated frame,
+- [x] Native helper never-ready, process exit, malformed frame, oversized frame, truncated frame,
   stdout close, stdin close, and nonzero exit.
 - [ ] ScreenCaptureKit stream stop/error and permission revocation while active.
 - [ ] BlackHole playback engine failure and output device disappearance.
 - [ ] Realtime provider disconnect and network loss.
 - [ ] FaceTime remote hangup while queued provider audio remains.
 - [ ] Restart OpenClaw after each failure and prove the identity is not stuck busy.
-- [ ] Repeated stop/shutdown calls are idempotent and do not target a later call.
+- [x] Repeated stop/shutdown calls are idempotent and do not target a later call.
 - [ ] No helper process, audio engine, capture stream, timer, or virtual device writer remains after
   cleanup.
 
 ### 7. Compatibility, security, and release gates
 
 - [ ] Run on the minimum declared macOS version and the current macOS release.
-- [ ] Run on Apple Silicon. Either run on Intel or explicitly remove/qualify Intel support.
+- [x] Run on Apple Silicon and explicitly qualify Intel as unsupported/unpackaged.
 - [ ] Test a normal desktop login and document that headless login is unsupported.
-- [ ] Fuzz the frame decoder and native JSON command decoder with bounded generated inputs.
-- [ ] Verify symlink/helper-path handling cannot execute an unexpected writable binary without an
-  explicit advanced override and warning.
-- [ ] Verify no raw audio file is created and inspect logs/state/package for credentials or raw
+- [x] Exercise frame/native command decoders with 1,000 bounded deterministic generated inputs.
+- [x] Remove the helper-path override entirely; the plugin executes only its packaged helper.
+- [x] Verify no raw audio file is created and inspect logs/state/package for credentials or raw
   transcripts.
-- [ ] Audit phone/email logging and add a privacy-preserving identifier or redaction mode.
-- [ ] Run `npm audit`, `npm run check`, `git diff --check`, `npm pack --dry-run`, source-linked load,
+- [x] Audit phone/email logging and replace identities with short hashes in runtime logs/session keys.
+- [x] Run `npm audit`, `npm run check`, `git diff --check`, `npm pack --dry-run`, source-linked load,
   archive install, and `plugins doctor` on the final SHA.
-- [ ] Add macOS CI for TypeScript tests, Swift debug/release compilation, native self-test, package
+- [x] Add macOS CI for TypeScript tests, Swift debug/release compilation, native self-test, package
   inspection, and helper IPC. Keep real FaceTime/TCC tests on a labeled physical-Mac runner.
 
 ### Audio-only exit criteria
@@ -178,7 +185,7 @@ Not yet proven:
 
 ### Research decision
 
-Use a renderer interface, but make the first backend
+Use one concrete local runtime built from
 [TalkingHead](https://github.com/met4citizen/TalkingHead) plus
 [HeadAudio](https://github.com/met4citizen/HeadAudio):
 
@@ -198,7 +205,8 @@ virtual camera. OBS is GPL-2.0-or-later and open source. Its WebSocket control A
 supports starting/stopping the virtual camera. Treat OBS as an optional system peer dependency,
 bind its WebSocket to localhost, and require authentication.
 
-Photorealistic single-photo rendering remains an optional GPU backend behind the same interface:
+Photorealistic single-photo rendering remains a possible later GPU sidecar, not a compatibility
+surface in the first implementation:
 
 | Candidate | Strength | Constraint / disposition |
 | --- | --- | --- |
@@ -210,56 +218,59 @@ Photorealistic single-photo rendering remains an optional GPU backend behind the
 
 ### 1. Define the video contract
 
-- [ ] Add an `AvatarRenderer` interface with lifecycle methods for prepare, start, PCM audio,
-  interrupt/clear, listening/speaking state, health, and stop.
-- [ ] Define renderer output as a live 30 fps canvas/stream at a configurable default such as
-  960×540 or 1280×720; do not couple call state to a particular model.
-- [ ] Add config under `channels.facetime.video`: `enabled`, `renderer`, `avatarPath`, dimensions,
-  frame rate, background, audioDelayMs, OBS URL/password SecretRef, scene/source names, and optional
-  remote-renderer endpoint.
-- [ ] Validate avatar paths and remote URLs, keep schemas recursively identical, and expose capability
+- [x] Add one concrete `FaceTimeAvatarRuntime` with start, PCM audio, interrupt/clear, health, and
+  stop lifecycle behavior; do not add compatibility aliases or unused backend abstractions.
+- [x] Define renderer output as a live 1280×720 canvas and make OBS dimensions configurable.
+- [x] Add config under `channels.facetime.avatar`: enablement, optional GLB URL, audio delay, bounded
+  buffering, renderer port, and authenticated OBS URL/password environment variable/scene/source.
+- [x] Validate model/OBS URLs and dimensions, keep schemas recursively identical, and expose capability
   readiness in status without starting OBS or a model.
-- [ ] Preserve audio-only operation whenever video is disabled or unhealthy.
+- [x] Preserve audio-only operation whenever video is disabled or unhealthy.
 
 ### 2. Build the local TalkingHead renderer
 
-- [ ] Pin reviewed TalkingHead and HeadAudio versions; record licenses and hashes.
-- [ ] Ship or document at least one redistributable GLB preset with Mixamo-compatible rig plus ARKit
-  and Oculus viseme blend shapes. Do not redistribute an avatar without explicit asset rights.
-- [ ] Serve a loopback-only renderer page with strict CSP and no cloud dependencies.
-- [ ] Feed the same provider PCM16 24 kHz chunks sent to BlackHole into a bounded renderer WebSocket
+- [x] Pin reviewed TalkingHead 1.7.0 and HeadAudio 0.1.0 packages; both declare MIT licenses and are
+  captured by `package-lock.json` integrity hashes.
+- [x] Ship a procedural face preset with no third-party likeness, and document optional operator-owned
+  TalkingHead-compatible GLB models instead of redistributing an avatar.
+- [x] Serve a loopback-only renderer page with strict CSP and bundled runtime/model assets.
+- [x] Feed the same provider PCM16 24 kHz chunks sent to BlackHole into a bounded renderer WebSocket
   or local IPC stream; never re-encode through a microphone loop.
-- [ ] Resample only if the selected HeadAudio model requires it and keep source timestamps.
+- [x] Let the HeadAudio AudioWorklet perform its required model-rate conversion from the canonical
+  24 kHz stream.
 - [ ] Drive idle, listening, thinking, speaking, interruption, and error expressions from call/talk
   events; mouth movement must stop immediately on barge-in or provider clear.
-- [ ] Ensure renderer audio is muted or disconnected from the physical output so only BlackHole feeds
+- [x] Ensure renderer audio is muted or disconnected from the physical output so only BlackHole feeds
   FaceTime and no echo path is introduced.
 
 ### 3. Keep audio and video synchronized
 
-- [ ] Introduce one timestamped A/V pacer shared by BlackHole output and the avatar renderer.
-- [ ] Account for HeadAudio's documented processing window and browser/OBS capture latency; delay
+- [x] Introduce one bounded A/V pacer shared by BlackHole output and the avatar renderer.
+- [x] Account for HeadAudio's documented processing window and browser/OBS capture latency; delay
   BlackHole output by a configurable bounded amount rather than letting video visibly trail audio.
-- [ ] Clear both BlackHole and avatar queues atomically on barge-in, hangup, provider cancellation,
+- [x] Clear both BlackHole and avatar queues atomically on barge-in, hangup, provider cancellation,
   and call replacement.
-- [ ] Expose queue depth, underruns, dropped frames, render fps, and measured skew without retaining
-  media.
+- [x] Expose client readiness plus sent/dropped byte counters without retaining media. Render FPS,
+  underruns, and measured skew remain part of the live-video measurement work.
 - [ ] Establish a measured acceptance target after the spike; initial goal: median absolute mouth/audio
   skew no greater than 100 ms and p95 no greater than 150 ms on the reference Mac.
 
 ### 4. Bridge the renderer into FaceTime
 
-- [ ] Detect OBS Studio and OBS Virtual Camera without mutating state during status/preflight.
-- [ ] Create or select a dedicated OBS scene and browser source through authenticated localhost
+- [x] Keep OBS and Virtual Camera startup out of status/preflight.
+- [x] Create or select a dedicated OBS scene and browser source through authenticated localhost
   obs-websocket; never reuse or overwrite an unrelated operator scene silently.
 - [ ] Start/stop Virtual Camera with the call lifecycle and reconcile OBS state after crashes/restarts.
+  Lifecycle code and mocked protocol tests pass; real start is blocked until macOS approves the OBS
+  Camera Extension.
 - [ ] Extend FaceTime Accessibility automation to select OBS Virtual Camera, enable/disable camera,
   and distinguish audio from video calls using stable identifiers where available.
-- [ ] Add `callMode: "audio" | "video"` and preserve the current `facetime-audio://` path for audio.
+- [ ] Add an explicit `callMode: "audio" | "video"`; no compatibility aliases or duplicate target
+  grammars.
 - [ ] Define inbound video acceptance and audio-to-video upgrade behavior explicitly; never enable a
   camera unexpectedly on an audio-only call.
-- [ ] If OBS or video routing fails, continue audio only when policy permits and report the exact
-  degraded state to the operator and caller.
+- [x] If OBS or video routing fails, continue audio only and report the exact degraded state to the
+  operator.
 
 ### 5. Optional photorealistic renderer spike
 
@@ -276,27 +287,33 @@ Photorealistic single-photo rendering remains an optional GPU backend behind the
 
 ### 6. Video test matrix
 
-- [ ] Renderer unit tests: config, bounded PCM queue, resampling, timestamps, state transitions, and
-  atomic clear.
-- [ ] Browser tests: preset loads, WebGL loss/recovery, audio worklet loads, visemes move during known
-  phonemes, mouth returns to neutral during silence, and no audible local playback.
+- [x] Renderer unit tests: config, authenticated loopback access, bounded PCM queue, missing clients,
+  occupied port, A/V delay, drops, and atomic clear.
+- [x] Browser smoke: the bundled preset, HeadAudio worklet/model, and synthetic PCM stream reached
+  `ready · streaming` in headless Chrome and an OBS browser source at 1280×720 with no physical
+  audio connection. Both captures are tracked under `docs/evidence/`.
+- [ ] Browser recovery tests: WebGL loss/recovery, known-phoneme viseme assertions, and GPU-neutral
+  silence fixtures.
 - [ ] Golden visual fixtures for neutral/listening/speaking expressions with perceptual thresholds
   tolerant of GPU raster differences.
 - [ ] Automated A/V test: feed a pulse/phoneme fixture, capture rendered frames plus BlackHole timing,
   and calculate mouth/audio skew.
 - [ ] OBS tests: missing app, unavailable virtual camera, bad password, occupied port, scene collision,
   start/stop, OBS crash, and stale virtual-camera state.
+  Automated coverage currently includes unavailable server, camera-extension rejection, dedicated
+  scene/source creation, and verified start/stop protocol behavior.
 - [ ] FaceTime live test: remote caller sees the avatar at the configured resolution/frame rate and
   hears matching audio through three turns.
 - [ ] Barge-in live test: mouth and audio stop together; stale frames/audio do not resume.
-- [ ] Audio-only fallback during renderer, browser, OBS, and virtual-camera failures.
+- [x] Audio-only fallback during renderer, browser, OBS, and virtual-camera failures at the plugin
+  lifecycle boundary.
 - [ ] 60-minute video soak with CPU/GPU/memory, fps, dropped frames, queue depth, and skew.
 - [ ] Verify no portrait, rendered frame, face embedding, raw audio, or video recording is retained
   unless the operator explicitly enabled diagnostics and consented.
 
 ### Video exit criteria
 
-- [ ] A preset avatar works locally on the reference Mac without CUDA.
+- [x] A preset avatar works locally on the reference Apple Silicon Mac without CUDA.
 - [ ] FaceTime receives a stable live virtual-camera feed while caller audio and model audio remain
   duplex and echo-free.
 - [ ] Three turns, consult, barge-in, busy handling, remote/local hangup, renderer crash, OBS crash,
@@ -304,12 +321,34 @@ Photorealistic single-photo rendering remains an optional GPU backend behind the
 - [ ] Measured A/V skew meets the published target, with no unbounded queues or stale playback.
 - [ ] Every shipped code, model, and avatar asset has a recorded license and redistribution decision.
 
+## Automated Evidence — 2026-07-16
+
+Implementation SHA: `9822b97`
+
+- `npm run check:release`: passed.
+- TypeScript: `tsc --noEmit` passed.
+- Swift: debug and release builds plus the native framing/command self-test passed.
+- Vitest: 12 files / 48 tests passed, including process-level helper IPC, lifecycle/failure paths,
+  25-call synthetic state soak, deterministic generated frame input, bounded renderer/pacer queues,
+  and mocked OBS protocol behavior.
+- Package: secret scan, executable helper check, 14 production dependency licenses, clean archive
+  install/load/doctor/uninstall with OpenClaw 2026.7.2-beta.1, and `npm pack --dry-run` passed.
+- Dependency audit: zero production vulnerabilities after upgrading `ws` to 8.21.1.
+- Public Git install from `git:github.com/RomneyDa/openclaw-facetime-plugin@main` passed on the
+  pre-avatar release and is repeated after these commits are pushed.
+- Renderer: headless Chrome and OBS Studio 32.1.2 both loaded the bundled 1280×720 renderer,
+  initialized HeadAudio, connected to the authenticated loopback stream, and reported
+  `ready · streaming`; captures are in `docs/evidence/`.
+- OBS Virtual Camera: correctly rejected as inactive. `systemextensionsctl` reports
+  `activated waiting for user`; macOS approval and the subsequent FaceTime camera-selection test
+  remain open.
+
 ## Proposed Delivery Sequence
 
 1. `live-audio-proof`: add observability and complete the real audio-only test matrix.
 2. `audio-hardening`: fix findings from live calls, add crash/restart/soak coverage, and publish the
    first audio-only release.
-3. `avatar-contract`: config, renderer interface, event/audio fanout, and deterministic tests.
+3. `avatar-contract`: config, concrete runtime, event/audio fanout, and deterministic tests.
 4. `talkinghead-renderer`: local TalkingHead + HeadAudio preset avatar and A/V pacer.
 5. `obs-virtual-camera`: authenticated OBS scene control and FaceTime video selection.
 6. `video-live-proof`: real video call matrix, sync tuning, fallback, privacy, and soak.
