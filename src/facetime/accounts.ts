@@ -57,10 +57,10 @@ export function resolveFaceTimeAccount(params: {
   const merged = mergeAccountConfig(section, accountConfig);
   const baseEnabled = section.enabled !== false;
   const accountEnabled = accountConfig?.enabled !== false;
-  const configuredPath = merged.helperPath?.trim();
-  const helperPath = configuredPath
-    ? path.resolve(configuredPath)
-    : path.resolve(params.cwd ?? PLUGIN_ROOT, FACETIME_DEFAULT_HELPER_RELATIVE_PATH);
+  const helperPath = path.resolve(
+    params.cwd ?? PLUGIN_ROOT,
+    FACETIME_DEFAULT_HELPER_RELATIVE_PATH,
+  );
   return {
     accountId,
     enabled: baseEnabled && accountEnabled,

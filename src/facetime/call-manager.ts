@@ -4,7 +4,7 @@ import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-ru
 import type { RealtimeVoiceBridgeSession } from "openclaw/plugin-sdk/realtime-voice";
 import { FaceTimeNativeBridge } from "./native-bridge.js";
 import { startFaceTimeRealtimeSession } from "./realtime.js";
-import { normalizeFaceTimeAddress } from "./targets.js";
+import { faceTimePeerId, normalizeFaceTimeAddress } from "./targets.js";
 import type {
   FaceTimeCallSnapshot,
   FaceTimeCallState,
@@ -249,7 +249,7 @@ export class FaceTimeCallManager {
   #assertAvailable(): void {
     if (this.#active) {
       throw new Error(
-        `FaceTime identity ${this.account.identity ?? this.account.accountId} already has active call ${this.#active.id}`,
+        `FaceTime account ${this.account.accountId} already has active call ${this.#active.id}`,
       );
     }
   }
@@ -325,9 +325,10 @@ export class FaceTimeCallManager {
   }
 
   async #handleIncoming(callId: string, peer: string): Promise<void> {
+    const callerId = faceTimePeerId(peer);
     if (this.#active) {
       this.bridge.sendCommand({ type: "decline", callId, reason: "busy" });
-      this.logger.info(`[facetime] declined concurrent call from ${peer}: busy`);
+      this.logger.info(`[facetime] declined concurrent caller=${callerId}: busy`);
       return;
     }
     const policy = this.account.config.inboundPolicy ?? "allowlist";
@@ -342,11 +343,11 @@ export class FaceTimeCallManager {
         callId,
         reason: policy === "disabled" ? "inbound disabled" : "caller not allowed",
       });
-      this.logger.info(`[facetime] declined inbound call from ${peer}: policy=${policy}`);
+      this.logger.info(`[facetime] declined inbound caller=${callerId}: policy=${policy}`);
       return;
     }
     const call = this.#createCall("inbound", peer, "ringing", callId);
-    this.logger.info(`[facetime] inbound call from ${peer} (${call.id})`);
+    this.logger.info(`[facetime] inbound caller=${callerId} call=${call.id}`);
     if (this.account.config.autoAnswer !== false) {
       await this.answer(call.id);
     }

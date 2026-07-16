@@ -131,6 +131,17 @@ export const faceTimeOnboardingAdapter: ChannelSetupWizardAdapter = {
         ],
       }),
     );
+    if (inboundPolicy === "open") {
+      const confirmed = Boolean(
+        await prompter.confirm({
+          message: "Open policy answers any detected caller before identity can be verified. Continue?",
+          initialValue: false,
+        }),
+      );
+      if (!confirmed) {
+        throw new Error("Open inbound policy was not confirmed");
+      }
+    }
     const allowFrom =
       inboundPolicy === "allowlist"
         ? await promptAllowFrom(prompter, current.config.allowFrom ?? [])

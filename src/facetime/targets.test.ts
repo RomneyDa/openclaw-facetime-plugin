@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatFaceTimeTarget, parseFaceTimeTarget } from "./targets.js";
+import { faceTimePeerId, formatFaceTimeTarget, parseFaceTimeTarget } from "./targets.js";
 
 describe("FaceTime targets", () => {
   it("normalizes phone and email targets", () => {
@@ -15,5 +15,12 @@ describe("FaceTime targets", () => {
 
   it("rejects ambiguous identifiers", () => {
     expect(() => parseFaceTimeTarget("not-a-face-time-address")).toThrow(/Invalid FaceTime/);
+  });
+
+  it("creates stable privacy-preserving peer identifiers", () => {
+    expect(faceTimePeerId("Caller@Example.com")).toBe(faceTimePeerId("caller@example.com"));
+    expect(faceTimePeerId("caller@example.com")).not.toBe(faceTimePeerId("other@example.com"));
+    expect(faceTimePeerId("caller@example.com")).not.toContain("caller");
+    expect(faceTimePeerId("caller@example.com")).toMatch(/^[a-f0-9]{12}$/u);
   });
 });

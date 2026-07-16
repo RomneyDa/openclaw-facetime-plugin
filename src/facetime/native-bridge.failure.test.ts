@@ -95,6 +95,25 @@ describe("FaceTime native bridge failures", () => {
     expect(bridge.running).toBe(false);
   });
 
+  it("rejects a truncated frame when helper stdout closes", async () => {
+    const bridge = new FaceTimeNativeBridge({
+      helperPath: helper(`
+        ${frame({ type: "ready", pid: 123 })}
+        setTimeout(() => {
+          process.stdout.write(Buffer.from([2, 0, 0, 0, 8, 1, 2]));
+          process.exit(0);
+        }, 20);
+      `),
+      logger: logger(),
+    });
+    const errors: Error[] = [];
+    bridge.on("error", (error) => errors.push(error));
+    await bridge.start(configure);
+    await vi.waitFor(() =>
+      expect(errors.some((error) => /truncated frame bytes/.test(error.message))).toBe(true),
+    );
+  });
+
   it("bounds queued provider audio and reports dropped chunks", async () => {
     const log = logger();
     const bridge = new FaceTimeNativeBridge({
@@ -111,6 +130,7 @@ describe("FaceTime native bridge failures", () => {
     const results = Array.from({ length: 8 }, () => bridge.sendAudio(chunk));
     expect(results).toContain(false);
     expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("dropped provider audio"));
-    await bridge.stop();
+    await Promise.all([bridge.stop(), bridge.stop(), bridge.stop()]);
+    expect(bridge.running).toBe(false);
   });
 });

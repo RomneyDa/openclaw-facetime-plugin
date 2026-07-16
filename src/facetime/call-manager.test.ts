@@ -108,6 +108,9 @@ describe("FaceTime call policy and lifecycle", () => {
     });
     await vi.waitFor(() => expect(startRealtime).toHaveBeenCalledOnce());
     expect(manager.snapshot().active).toMatchObject({ id: "first", state: "connected" });
+    const logged = JSON.stringify(vi.mocked(logger.info).mock.calls);
+    expect(logged).not.toContain("caller@example.com");
+    expect(logged).not.toContain("other@example.com");
     await manager.stop();
   });
 

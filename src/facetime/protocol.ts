@@ -96,4 +96,13 @@ export class FaceTimeFrameDecoder {
     }
     return frames;
   }
+
+  finish(): void {
+    if (this.#buffer.byteLength === 0) {
+      return;
+    }
+    const buffered = this.#buffer.byteLength;
+    this.#buffer = Buffer.alloc(0);
+    throw new Error(`FaceTime native stream ended with ${buffered} truncated frame bytes`);
+  }
 }

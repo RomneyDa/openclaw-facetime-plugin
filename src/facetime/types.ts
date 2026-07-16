@@ -28,7 +28,6 @@ export type FaceTimeAccountConfig = {
   inboundPolicy?: FaceTimeInboundPolicy;
   allowFrom?: string[];
   autoAnswer?: boolean;
-  helperPath?: string;
   blackHoleDevice?: string;
   maxCallDurationMs?: number;
   dialTimeoutMs?: number;

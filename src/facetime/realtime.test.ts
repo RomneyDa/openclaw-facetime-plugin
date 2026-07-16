@@ -128,4 +128,19 @@ describe("FaceTime realtime bridge", () => {
     });
     expect(sdk.consultAgent).not.toHaveBeenCalled();
   });
+
+  it("uses a hashed caller id in consult state and metadata", async () => {
+    sdk.consultAgent.mockResolvedValue({ answer: "ok" });
+    await start("read-only");
+    await options.onToolCall({
+      name: "openclaw_agent_consult",
+      callId: "tool-1",
+      itemId: "item-1",
+      args: { question: "status" },
+    });
+    const consult = sdk.consultAgent.mock.calls[0]?.[0];
+    expect(consult.sessionKey).toMatch(/^agent:main:facetime:direct:[a-f0-9]{12}$/u);
+    expect(consult.surface).toMatch(/caller [a-f0-9]{12}/u);
+    expect(JSON.stringify(consult)).not.toContain("caller@example.com");
+  });
 });

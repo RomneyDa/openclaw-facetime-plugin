@@ -35,6 +35,12 @@ describe("FaceTime framed IPC", () => {
     expect(() => decoder.push(Buffer.from([99, 0, 0, 0, 0]))).toThrow(/Invalid/);
   });
 
+  it("rejects a truncated final frame", () => {
+    const decoder = new FaceTimeFrameDecoder();
+    decoder.push(Buffer.from([FACETIME_FRAME_AUDIO, 0, 0, 0, 4, 1, 2]));
+    expect(() => decoder.finish()).toThrow(/2 truncated frame bytes|7 truncated frame bytes/);
+  });
+
   it("rejects malformed and unknown native events", () => {
     expect(() => decodeFaceTimeEvent(Buffer.from("{"))).toThrow(/not valid JSON/);
     expect(() => decodeFaceTimeEvent(Buffer.from('{"type":"surprise"}'))).toThrow(

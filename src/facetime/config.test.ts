@@ -19,7 +19,10 @@ describe("FaceTime config", () => {
   });
 
   it("defaults to an allowlisted, auto-answer, OpenAI realtime account", () => {
-    const parsed = FaceTimeConfigSchema.parse({ identity: "agent@example.com" });
+    const parsed = FaceTimeConfigSchema.parse({
+      identity: "agent@example.com",
+      allowFrom: ["caller@example.com"],
+    });
     expect(parsed).toMatchObject({
       identity: "agent@example.com",
       inboundPolicy: "allowlist",
@@ -30,5 +33,12 @@ describe("FaceTime config", () => {
 
   it("rejects unknown public configuration", () => {
     expect(() => FaceTimeConfigSchema.parse({ identity: "a@b.com", secretThing: true })).toThrow();
+    expect(() => FaceTimeConfigSchema.parse({ identity: "a@b.com", helperPath: "/tmp/helper" })).toThrow();
+    expect(() => FaceTimeConfigSchema.parse({ identity: "not-an-identity" })).toThrow(
+      /valid Apple Account email/,
+    );
+    expect(() => FaceTimeConfigSchema.parse({ identity: "a@b.com", allowFrom: [] })).toThrow(
+      /At least one allowed caller/,
+    );
   });
 });

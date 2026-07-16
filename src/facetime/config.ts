@@ -1,9 +1,35 @@
 import { buildJsonChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-schema";
 import { z } from "zod";
+import { normalizeFaceTimeAddress } from "./targets.js";
 
 const nonEmpty = z.string().trim().min(1);
 const positiveMs = z.number().int().positive();
 const providerConfigs = z.record(z.string(), z.record(z.string(), z.unknown()).optional());
+const faceTimeAddress = nonEmpty.refine(
+  (value) => {
+    try {
+      normalizeFaceTimeAddress(value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  "Use a valid Apple Account email or international phone number",
+);
+const allowEntry = nonEmpty.refine(
+  (value) => {
+    if (value === "*") {
+      return true;
+    }
+    try {
+      normalizeFaceTimeAddress(value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  "Use *, a valid Apple Account email, or an international phone number",
+);
 
 export const FaceTimeRealtimeConfigSchema = z
   .object({
@@ -23,11 +49,10 @@ export const FaceTimeAccountConfigSchema: z.ZodType<Record<string, unknown>> = z
     .object({
       name: nonEmpty.optional(),
       enabled: z.boolean().optional(),
-      identity: nonEmpty.optional(),
+      identity: faceTimeAddress.optional(),
       inboundPolicy: z.enum(["allowlist", "open", "disabled"]).default("allowlist").optional(),
-      allowFrom: z.array(nonEmpty).optional(),
+      allowFrom: z.array(allowEntry).optional(),
       autoAnswer: z.boolean().default(true).optional(),
-      helperPath: nonEmpty.optional(),
       blackHoleDevice: nonEmpty.default("BlackHole 2ch").optional(),
       maxCallDurationMs: positiveMs.default(3_600_000).optional(),
       dialTimeoutMs: positiveMs.default(45_000).optional(),
@@ -35,7 +60,20 @@ export const FaceTimeAccountConfigSchema: z.ZodType<Record<string, unknown>> = z
       accounts: z.record(z.string(), FaceTimeAccountConfigSchema).optional(),
       defaultAccount: nonEmpty.optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, context) => {
+      if (
+        value.identity &&
+        (value.inboundPolicy ?? "allowlist") === "allowlist" &&
+        (!value.allowFrom || value.allowFrom.length === 0)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["allowFrom"],
+          message: "At least one allowed caller is required when inboundPolicy is allowlist",
+        });
+      }
+    }),
 );
 
 export const FaceTimeConfigSchema = FaceTimeAccountConfigSchema;
@@ -61,11 +99,26 @@ const realtimeJsonSchema = {
 const accountProperties = {
   name: { type: "string", minLength: 1 },
   enabled: { type: "boolean" },
-  identity: { type: "string", minLength: 1 },
+  identity: {
+    type: "string",
+    minLength: 1,
+    pattern: "^(?:[^\\s@]+@[^\\s@]+\\.[^\\s@]+|\\+?[0-9 ()\\-.]{7,25})$",
+  },
   inboundPolicy: { enum: ["allowlist", "open", "disabled"], default: "allowlist" },
-  allowFrom: { type: "array", items: { type: "string", minLength: 1 } },
+  allowFrom: {
+    type: "array",
+    items: {
+      anyOf: [
+        { const: "*" },
+        {
+          type: "string",
+          minLength: 1,
+          pattern: "^(?:[^\\s@]+@[^\\s@]+\\.[^\\s@]+|\\+?[0-9 ()\\-.]{7,25})$",
+        },
+      ],
+    },
+  },
   autoAnswer: { type: "boolean", default: true },
-  helperPath: { type: "string", minLength: 1 },
   blackHoleDevice: { type: "string", minLength: 1, default: "BlackHole 2ch" },
   maxCallDurationMs: { type: "integer", minimum: 1, default: 3_600_000 },
   dialTimeoutMs: { type: "integer", minimum: 1, default: 45_000 },
@@ -78,6 +131,15 @@ export const FaceTimeConfigJsonSchema = {
   type: "object",
   additionalProperties: false,
   properties: accountProperties,
+  allOf: [
+    {
+      if: {
+        required: ["identity"],
+        properties: { inboundPolicy: { enum: ["allowlist"] } },
+      },
+      then: { required: ["allowFrom"], properties: { allowFrom: { minItems: 1 } } },
+    },
+  ],
 } as const;
 
 export const FaceTimeChannelConfigSchema = buildJsonChannelConfigSchema(

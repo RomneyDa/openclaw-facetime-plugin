@@ -1,6 +1,7 @@
-src/**/*.test.ts
-native/Tests/
-native/.build/
 .worktrees/
+coverage/
+native/.build/
+scripts/
+src/**/*.test.ts
 tmp/
 *.tgz

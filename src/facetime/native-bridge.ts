@@ -32,6 +32,7 @@ export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvent
   #queued: Buffer[] = [];
   #queuedBytes = 0;
   #stopping = false;
+  #stopPromise: Promise<void> | null = null;
 
   constructor(params: {
     helperPath: string;
@@ -55,6 +56,7 @@ export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvent
       return;
     }
     this.#stopping = false;
+    this.#decoder = new FaceTimeFrameDecoder();
     const child = spawn(this.helperPath, ["--stdio"], {
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, LANG: process.env.LANG ?? "en_US.UTF-8" },
@@ -72,6 +74,13 @@ export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvent
       } catch (error) {
         this.emit("error", error instanceof Error ? error : new Error(String(error)));
         void this.stop();
+      }
+    });
+    child.stdout.on("end", () => {
+      try {
+        this.#decoder.finish();
+      } catch (error) {
+        this.emit("error", error instanceof Error ? error : new Error(String(error)));
       }
     });
     child.stderr.on("data", (chunk: Buffer | string) => {
@@ -200,6 +209,19 @@ export class FaceTimeNativeBridge extends EventEmitter<FaceTimeNativeBridgeEvent
   }
 
   async stop(): Promise<void> {
+    if (this.#stopPromise) {
+      await this.#stopPromise;
+      return;
+    }
+    this.#stopPromise = this.#stopChild();
+    try {
+      await this.#stopPromise;
+    } finally {
+      this.#stopPromise = null;
+    }
+  }
+
+  async #stopChild(): Promise<void> {
     const child = this.#child;
     if (!child) {
       return;

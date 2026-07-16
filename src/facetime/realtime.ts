@@ -11,6 +11,7 @@ import {
   type RealtimeVoiceToolCallEvent,
 } from "openclaw/plugin-sdk/realtime-voice";
 import type { FaceTimeNativeBridge } from "./native-bridge.js";
+import { faceTimePeerId } from "./targets.js";
 import { FACETIME_AUDIO_FORMAT, type ResolvedFaceTimeAccount } from "./types.js";
 
 function resolveToolPolicy(account: ResolvedFaceTimeAccount) {
@@ -46,7 +47,8 @@ export async function startFaceTimeRealtimeSession(params: {
   const transcript: Array<{ role: "user" | "assistant"; text: string }> = [];
   const policy = resolveToolPolicy(params.account);
   const agentId = params.account.config.realtime?.agentId?.trim() || "main";
-  const sessionKey = `agent:${agentId}:facetime:direct:${encodeURIComponent(params.peer)}`;
+  const callerId = faceTimePeerId(params.peer);
+  const sessionKey = `agent:${agentId}:facetime:direct:${callerId}`;
   let session: RealtimeVoiceBridgeSession;
 
   const handleToolCall = async (event: RealtimeVoiceToolCallEvent) => {
@@ -67,7 +69,7 @@ export async function startFaceTimeRealtimeSession(params: {
         runIdPrefix: `facetime:${params.callId}`,
         args: event.args,
         transcript,
-        surface: `a private FaceTime Audio call with ${params.peer}`,
+        surface: `a private FaceTime Audio call (caller ${callerId})`,
         userLabel: "Caller",
         assistantLabel: "Agent",
         questionSourceLabel: "caller",

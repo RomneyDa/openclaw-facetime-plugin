@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "macOS FaceTime Audio channel for OpenClaw with ScreenCaptureKit, BlackHole, and realtime voice",
   "type": "module",
-  "main": "index.ts",
+  "main": "dist/index.mjs",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -14,12 +14,18 @@
   },
   "homepage": "https://github.com/RomneyDa/openclaw-facetime-plugin#readme",
   "scripts": {
+    "build": "npm run build:plugin && npm run build:native",
+    "build:plugin": "node scripts/build-plugin.mjs",
     "build:native": "swift build --package-path native -c release",
     "test:native": "swift build --package-path native && native/.build/debug/openclaw-facetime-bridge --self-test",
+    "prepare": "npm run build:plugin",
     "postinstall": "npm run build:native",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run build:native && npm run test:native && npm run test"
+    "test:package": "node scripts/verify-package.mjs && node scripts/test-clean-install.mjs",
+    "audit:dependencies": "npm audit --omit=dev --audit-level=high",
+    "check": "npm run typecheck && npm run build && npm run test:native && npm run test",
+    "check:release": "npm run check && npm run test:package && npm run audit:dependencies"
   },
   "engines": {
     "node": ">=22.22.3"
@@ -38,7 +44,7 @@
     "macos"
   ],
   "peerDependencies": {
-    "openclaw": ">=2026.7.1"
+    "openclaw": ">=2026.7.2-beta.1"
   },
   "peerDependenciesMeta": {
     "openclaw": {
@@ -51,17 +57,18 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
-    "openclaw": "2026.7.1",
+    "esbuild": "^0.25.12",
+    "openclaw": "2026.7.2-beta.1",
     "typescript": "^5.8.3",
     "vitest": "^3.2.2"
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.mjs"
     ],
-    "setupEntry": "./setup-entry.ts",
+    "setupEntry": "./dist/setup-entry.mjs",
     "compat": {
-      "pluginApi": ">=2026.7.1"
+      "pluginApi": ">=2026.7.2-beta.1"
     },
     "channel": {
       "id": "facetime",

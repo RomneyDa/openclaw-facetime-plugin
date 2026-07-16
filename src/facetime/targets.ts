@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type FaceTimeTarget = {
   address: string;
   accountId?: string;
@@ -41,4 +43,14 @@ export function formatFaceTimeTarget(target: FaceTimeTarget): string {
   return target.accountId
     ? `facetime:${target.accountId}:${target.address}`
     : `facetime:${target.address}`;
+}
+
+export function faceTimePeerId(value: string): string {
+  let normalized: string;
+  try {
+    normalized = normalizeFaceTimeAddress(value);
+  } catch {
+    normalized = value.trim().toLowerCase();
+  }
+  return createHash("sha256").update(normalized).digest("hex").slice(0, 12);
 }

@@ -17,11 +17,10 @@
     "properties": {
       "name": { "type": "string", "minLength": 1 },
       "enabled": { "type": "boolean" },
-      "identity": { "type": "string", "minLength": 1 },
+      "identity": { "type": "string", "minLength": 1, "pattern": "^(?:[^\\s@]+@[^\\s@]+\\.[^\\s@]+|\\+?[0-9 ()\\-.]{7,25})$" },
       "inboundPolicy": { "enum": ["allowlist", "open", "disabled"], "default": "allowlist" },
-      "allowFrom": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+      "allowFrom": { "type": "array", "items": { "anyOf": [{ "const": "*" }, { "type": "string", "minLength": 1, "pattern": "^(?:[^\\s@]+@[^\\s@]+\\.[^\\s@]+|\\+?[0-9 ()\\-.]{7,25})$" }] } },
       "autoAnswer": { "type": "boolean", "default": true },
-      "helperPath": { "type": "string", "minLength": 1 },
       "blackHoleDevice": { "type": "string", "minLength": 1, "default": "BlackHole 2ch" },
       "maxCallDurationMs": { "type": "integer", "minimum": 1, "default": 3600000 },
       "dialTimeoutMs": { "type": "integer", "minimum": 1, "default": 45000 },
@@ -41,7 +40,8 @@
       },
       "accounts": { "type": "object", "additionalProperties": { "$ref": "#" } },
       "defaultAccount": { "type": "string", "minLength": 1 }
-    }
+    },
+    "allOf": [{ "if": { "required": ["identity"], "properties": { "inboundPolicy": { "enum": ["allowlist"] } } }, "then": { "required": ["allowFrom"], "properties": { "allowFrom": { "minItems": 1 } } } }]
   },
   "channelConfigs": {
     "facetime": {
@@ -51,11 +51,10 @@
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "enabled": { "type": "boolean" },
-          "identity": { "type": "string", "minLength": 1 },
+          "identity": { "type": "string", "minLength": 1, "pattern": "^(?:[^\\s@]+@[^\\s@]+\\.[^\\s@]+|\\+?[0-9 ()\\-.]{7,25})$" },
           "inboundPolicy": { "enum": ["allowlist", "open", "disabled"], "default": "allowlist" },
-          "allowFrom": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "allowFrom": { "type": "array", "items": { "anyOf": [{ "const": "*" }, { "type": "string", "minLength": 1, "pattern": "^(?:[^\\s@]+@[^\\s@]+\\.[^\\s@]+|\\+?[0-9 ()\\-.]{7,25})$" }] } },
           "autoAnswer": { "type": "boolean", "default": true },
-          "helperPath": { "type": "string", "minLength": 1 },
           "blackHoleDevice": { "type": "string", "minLength": 1, "default": "BlackHole 2ch" },
           "maxCallDurationMs": { "type": "integer", "minimum": 1, "default": 3600000 },
           "dialTimeoutMs": { "type": "integer", "minimum": 1, "default": 45000 },
@@ -75,7 +74,8 @@
           },
           "accounts": { "type": "object", "additionalProperties": { "$ref": "#" } },
           "defaultAccount": { "type": "string", "minLength": 1 }
-        }
+        },
+        "allOf": [{ "if": { "required": ["identity"], "properties": { "inboundPolicy": { "enum": ["allowlist"] } } }, "then": { "required": ["allowFrom"], "properties": { "allowFrom": { "minItems": 1 } } } }]
       },
       "label": "FaceTime",
       "description": "macOS FaceTime Audio realtime voice channel"
