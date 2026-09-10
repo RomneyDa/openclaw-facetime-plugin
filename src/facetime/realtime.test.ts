@@ -1,6 +1,6 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
-import type { RealtimeVoiceBridgeSession } from "openclaw/plugin-sdk/realtime-voice";
+import type { RealtimeVoiceBridgeSession } from "./realtime-sdk.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FaceTimeOutputPacer } from "./output-pacer.js";
 import { startFaceTimeRealtimeSession } from "./realtime.js";
@@ -14,7 +14,7 @@ const sdk = vi.hoisted(() => ({
   resolveToolsAllow: vi.fn(),
 }));
 
-vi.mock("openclaw/plugin-sdk/realtime-voice", () => ({
+vi.mock("./realtime-sdk.js", () => ({
   REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME: "openclaw_agent_consult",
   consultRealtimeVoiceAgent: sdk.consultAgent,
   createRealtimeVoiceBridgeSession: sdk.createSession,

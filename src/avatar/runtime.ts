@@ -1,39 +1,58 @@
-import { randomBytes } from "node:crypto";
-import path from "node:path";
+import {
+  createAvatarRenderer,
+  type AvatarClearReason,
+  type AvatarRenderer,
+  type AvatarState,
+} from "openclaw-avatar-plugin/renderer";
 import type { RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
 import type { ResolvedFaceTimeAccount } from "../facetime/types.js";
 import { FaceTimeObsController } from "./obs.js";
-import { FaceTimeAvatarServer } from "./server.js";
 
 export class FaceTimeAvatarRuntime {
-  readonly server: FaceTimeAvatarServer;
+  readonly renderer: AvatarRenderer;
   readonly logger: RuntimeLogger;
   readonly obs: FaceTimeObsController | null;
+  readonly video: { width: number; height: number; frameRate: number };
   #obsError?: string;
+  #rendererError?: string;
+  #activeSessionId: string | null = null;
   #callDroppedStart = 0;
 
-  constructor(params: { account: ResolvedFaceTimeAccount; logger: RuntimeLogger }) {
+  constructor(params: {
+    account: ResolvedFaceTimeAccount;
+    logger: RuntimeLogger;
+    renderer?: AvatarRenderer;
+    obs?: FaceTimeObsController | null;
+  }) {
     const config = params.account.config.avatar ?? {};
-    const pluginRoot = path.resolve(params.account.helperPath, "../../..");
     this.logger = params.logger;
-    this.server = new FaceTimeAvatarServer({
-      assetsPath: path.join(pluginRoot, "dist", "avatar"),
-      token: randomBytes(24).toString("base64url"),
-      port: config.port ?? 18_794,
-      maxBufferedBytes: config.maxBufferedBytes ?? 1_048_576,
-      modelUrl: config.modelUrl,
-    });
-    this.obs = config.obs?.enabled
-      ? new FaceTimeObsController({ config: config.obs, logger: params.logger })
-      : null;
+    this.renderer =
+      params.renderer ??
+      createAvatarRenderer({
+        port: config.port ?? 18_794,
+        maxSubscriberMediaBytes: config.maxBufferedBytes ?? 1_048_576,
+        maxTransportBufferedBytes: config.maxBufferedBytes ?? 1_048_576,
+        onSubscriberError: (_id, error) => this.#recordRendererError(error),
+      });
+    this.obs =
+      params.obs !== undefined
+        ? params.obs
+        : config.obs?.enabled
+          ? new FaceTimeObsController({ config: config.obs, logger: params.logger })
+          : null;
+    this.video = {
+      width: config.obs?.width ?? 1_280,
+      height: config.obs?.height ?? 720,
+      frameRate: 30,
+    };
   }
 
   async start(): Promise<void> {
-    await this.server.start();
-    this.logger.info(`[facetime-avatar] renderer listening on loopback port ${this.server.snapshot().port}`);
+    await this.renderer.start();
+    this.logger.info(`[facetime-avatar] renderer listening on ${new URL(this.renderer.rendererUrl).origin}`);
     if (this.obs) {
       try {
-        await this.obs.configure(this.server.rendererUrl);
+        await this.obs.configure(this.renderer.rendererUrl);
       } catch (error) {
         this.#obsError = error instanceof Error ? error.message : String(error);
         this.logger.warn?.(`[facetime-avatar] OBS setup failed: ${this.#obsError}`);
@@ -41,9 +60,16 @@ export class FaceTimeAvatarRuntime {
     }
   }
 
-  async beginCall(callId: string): Promise<void> {
-    this.#callDroppedStart = this.server.snapshot().droppedBytes;
-    this.server.broadcast({ type: "call-start", callId });
+  async beginCall(sessionId: string): Promise<void> {
+    try {
+      if (this.#activeSessionId) this.renderer.consumer.end("replaced");
+      this.#activeSessionId = sessionId;
+      this.#callDroppedStart = this.#droppedBytes();
+      this.renderer.consumer.start({ sessionId, video: this.video, initialState: "listening" });
+    } catch (error) {
+      this.#activeSessionId = null;
+      this.#recordRendererError(error);
+    }
     try {
       await this.obs?.startVirtualCamera();
     } catch (error) {
@@ -52,31 +78,73 @@ export class FaceTimeAvatarRuntime {
     }
   }
 
-  sendAudio(audio: Buffer): boolean {
-    return this.server.sendAudio(audio);
+  sendAudio(audio: Uint8Array, ptsMs: number): boolean {
+    if (!this.#activeSessionId) return false;
+    try {
+      return this.renderer.consumer.audio(audio, ptsMs);
+    } catch (error) {
+      this.#recordRendererError(error);
+      return false;
+    }
   }
 
-  clear(callId?: string): void {
-    this.server.broadcast({ type: "clear", callId });
+  state(state: AvatarState, ptsMs: number): void {
+    if (!this.#activeSessionId) return;
+    try {
+      this.renderer.consumer.state(state, ptsMs);
+    } catch (error) {
+      this.#recordRendererError(error);
+    }
   }
 
-  async endCall(callId: string): Promise<number> {
-    this.server.broadcast({ type: "clear", callId });
-    this.server.broadcast({ type: "call-end", callId });
+  clear(reason: AvatarClearReason): void {
+    if (!this.#activeSessionId) return;
+    try {
+      this.renderer.consumer.clear(reason);
+      this.renderer.consumer.state("listening", 0);
+    } catch (error) {
+      this.#recordRendererError(error);
+    }
+  }
+
+  async endCall(sessionId: string): Promise<number> {
+    if (this.#activeSessionId === sessionId) {
+      try {
+        this.renderer.consumer.end("hangup");
+      } catch (error) {
+        this.#recordRendererError(error);
+      }
+      this.#activeSessionId = null;
+    }
     await this.obs?.stopVirtualCamera().catch((error) => {
-      this.logger.warn?.(
-        `[facetime-avatar] virtual camera stop failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.#obsError = error instanceof Error ? error.message : String(error);
+      this.logger.warn?.(`[facetime-avatar] virtual camera stop failed: ${this.#obsError}`);
     });
-    return this.server.snapshot().droppedBytes - this.#callDroppedStart;
+    return Math.max(0, this.#droppedBytes() - this.#callDroppedStart);
   }
 
   snapshot() {
-    return { ...this.server.snapshot(), rendererUrl: this.server.rendererUrl, obsError: this.#obsError };
+    return {
+      renderer: this.renderer.snapshot(),
+      rendererUrl: this.renderer.rendererUrl,
+      activeSessionId: this.#activeSessionId,
+      rendererError: this.#rendererError,
+      obsError: this.#obsError,
+    };
   }
 
   async stop(): Promise<void> {
+    this.#activeSessionId = null;
     await this.obs?.stop();
-    await this.server.stop();
+    await this.renderer.stop();
+  }
+
+  #droppedBytes(): number {
+    return this.renderer.snapshot().session.droppedMediaBytes;
+  }
+
+  #recordRendererError(error: unknown): void {
+    this.#rendererError = error instanceof Error ? error.message : String(error);
+    this.logger.warn?.(`[facetime-avatar] renderer degraded: ${this.#rendererError}`);
   }
 }

@@ -1,4 +1,5 @@
 import type { RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
+import type { AvatarClearReason, AvatarState } from "openclaw-avatar-plugin/renderer";
 import type { FaceTimeAvatarRuntime } from "../avatar/runtime.js";
 import type { FaceTimeNativeBridge } from "./native-bridge.js";
 
@@ -13,6 +14,7 @@ export class FaceTimeOutputPacer {
   #pending = new Set<ReturnType<typeof setTimeout>>();
   #pendingBytes = 0;
   #droppedBytes = 0;
+  #avatarSamples = 0;
 
   constructor(params: {
     nativeBridge: FaceTimeNativeBridge;
@@ -41,7 +43,9 @@ export class FaceTimeOutputPacer {
   }
 
   send(audio: Buffer): void {
-    this.avatar?.sendAudio(audio);
+    const ptsMs = this.#avatarSamples / 24;
+    this.avatar?.sendAudio(audio, ptsMs);
+    this.#avatarSamples += Math.floor(audio.byteLength / 2);
     if (this.delayMs === 0) {
       this.#deliver(audio);
       return;
@@ -62,18 +66,23 @@ export class FaceTimeOutputPacer {
     this.#pending.add(timer);
   }
 
-  clear(): void {
+  state(state: AvatarState): void {
+    this.avatar?.state(state, this.#avatarSamples / 24);
+  }
+
+  clear(reason: AvatarClearReason = "cancel"): void {
     for (const timer of this.#pending) {
       clearTimeout(timer);
     }
     this.#pending.clear();
     this.#pendingBytes = 0;
+    this.#avatarSamples = 0;
     try {
       this.nativeBridge.sendCommand({ type: "clear-audio", callId: this.callId });
     } catch {
       // Native helper failure is handled by the call manager.
     }
-    this.avatar?.clear(this.callId);
+    this.avatar?.clear(reason);
   }
 
   #deliver(audio: Buffer): void {

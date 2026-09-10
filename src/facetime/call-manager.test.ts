@@ -1,9 +1,11 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
-import type { RealtimeVoiceBridgeSession } from "openclaw/plugin-sdk/realtime-voice";
+import type { RealtimeVoiceBridgeSession } from "./realtime-sdk.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FaceTimeAvatarRuntime } from "../avatar/runtime.js";
 import { FaceTimeCallManager, isFaceTimeCallerAllowed } from "./call-manager.js";
 import { FaceTimeNativeBridge } from "./native-bridge.js";
+import type { FaceTimeOutputPacer } from "./output-pacer.js";
 import type { FaceTimeNativeCommand, ResolvedFaceTimeAccount } from "./types.js";
 
 const logger = {
@@ -191,6 +193,84 @@ describe("FaceTime call policy and lifecycle", () => {
     bridge.emit("audio", Buffer.from([1, 2, 3, 4]));
     expect(fakeSession.sendAudio).toHaveBeenCalledWith(Buffer.from([1, 2, 3, 4]));
     expect(manager.snapshot().active?.inputBytes).toBe(4);
+    await manager.stop();
+  });
+
+  it("starts exactly one avatar consumer beside the one realtime session", async () => {
+    const bridge = new FakeBridge({ helperPath: "/tmp/helper", logger });
+    const avatar = {
+      start: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+      beginCall: vi.fn(async () => {}),
+      sendAudio: vi.fn(() => true),
+      state: vi.fn(),
+      clear: vi.fn(),
+      endCall: vi.fn(async () => 0),
+      snapshot: vi.fn(() => ({})),
+    } as unknown as FaceTimeAvatarRuntime;
+    const createAvatar = vi.fn(() => avatar);
+    const startRealtime = vi.fn(async (params: { output: FaceTimeOutputPacer }) => {
+      params.output.send(Buffer.from([1, 2, 3, 4]));
+      return fakeSession;
+    });
+    const manager = new FaceTimeCallManager({
+      account: account({ avatar: { enabled: true } }),
+      cfg: {} as OpenClawConfig,
+      runtime: {} as PluginRuntime,
+      logger,
+      bridge,
+      startRealtime: startRealtime as never,
+      createAvatar,
+    });
+    await manager.start();
+    const call = await manager.dial("target@example.com");
+    const connected = {
+      type: "call-state" as const,
+      callId: call.id,
+      state: "connected" as const,
+      peer: "target@example.com",
+    };
+    bridge.emit("event", connected);
+    bridge.emit("event", connected);
+    await vi.waitFor(() => expect(startRealtime).toHaveBeenCalledOnce());
+    expect(createAvatar).toHaveBeenCalledOnce();
+    expect(avatar.start).toHaveBeenCalledOnce();
+    expect(avatar.beginCall).toHaveBeenCalledOnce();
+    expect(avatar.sendAudio).toHaveBeenCalledWith(Buffer.from([1, 2, 3, 4]), 0);
+    await manager.hangup(call.id);
+    expect(avatar.endCall).toHaveBeenCalledWith(call.id);
+    await manager.stop();
+  });
+
+  it("degrades avatar startup failure to an otherwise healthy audio call", async () => {
+    const bridge = new FakeBridge({ helperPath: "/tmp/helper", logger });
+    const avatar = {
+      start: vi.fn(async () => {
+        throw new Error("renderer port unavailable");
+      }),
+      stop: vi.fn(async () => {}),
+    } as unknown as FaceTimeAvatarRuntime;
+    const startRealtime = vi.fn(async () => fakeSession);
+    const manager = new FaceTimeCallManager({
+      account: account({ avatar: { enabled: true } }),
+      cfg: {} as OpenClawConfig,
+      runtime: {} as PluginRuntime,
+      logger,
+      bridge,
+      startRealtime,
+      createAvatar: () => avatar,
+    });
+    await manager.start();
+    const call = await manager.dial("target@example.com");
+    bridge.emit("event", {
+      type: "call-state",
+      callId: call.id,
+      state: "connected",
+      peer: "target@example.com",
+    });
+    await vi.waitFor(() => expect(startRealtime).toHaveBeenCalledOnce());
+    expect(manager.snapshot().active).toMatchObject({ id: call.id, state: "connected" });
+    expect(manager.snapshot().avatar).toBeNull();
     await manager.stop();
   });
 

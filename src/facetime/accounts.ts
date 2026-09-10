@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/core";
 import type { FaceTimeAccountConfig, ResolvedFaceTimeAccount } from "./types.js";
 import { FACETIME_DEFAULT_HELPER_RELATIVE_PATH } from "./types.js";

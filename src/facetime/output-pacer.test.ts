@@ -31,15 +31,17 @@ describe("FaceTime A/V output pacer", () => {
       logger: logger(),
       onDelivered: delivered,
     });
-    const audio = Buffer.from([1, 2, 3, 4]);
+    const audio = Buffer.alloc(960, 7);
     pacer.send(audio);
-    expect(avatar.sendAudio).toHaveBeenCalledWith(audio);
+    expect(avatar.sendAudio).toHaveBeenCalledWith(audio, 0);
+    pacer.send(audio);
+    expect(avatar.sendAudio).toHaveBeenNthCalledWith(2, audio, 20);
     expect(nativeBridge.sendAudio).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(79);
     expect(nativeBridge.sendAudio).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(nativeBridge.sendAudio).toHaveBeenCalledWith(audio);
-    expect(delivered).toHaveBeenCalledWith(4);
+    expect(delivered).toHaveBeenCalledWith(960);
   });
 
   it("atomically cancels delayed, native, and avatar output", async () => {
@@ -58,11 +60,13 @@ describe("FaceTime A/V output pacer", () => {
       logger: logger(),
     });
     pacer.send(Buffer.from([1, 2]));
-    pacer.clear();
+    pacer.clear("barge-in");
     await vi.advanceTimersByTimeAsync(100);
     expect(nativeBridge.sendAudio).not.toHaveBeenCalled();
     expect(nativeBridge.sendCommand).toHaveBeenCalledWith({ type: "clear-audio", callId: "call-1" });
-    expect(avatar.clear).toHaveBeenCalledWith("call-1");
+    expect(avatar.clear).toHaveBeenCalledWith("barge-in");
+    pacer.send(Buffer.from([3, 4]));
+    expect(avatar.sendAudio).toHaveBeenLastCalledWith(Buffer.from([3, 4]), 0);
   });
 
   it("bounds delayed audio and records drops", () => {
