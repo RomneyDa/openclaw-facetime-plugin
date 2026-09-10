@@ -58,7 +58,13 @@ try {
     OPENCLAW_CONFIG_PATH: path.join(stateDir, "openclaw.json"),
     NO_COLOR: "1",
   };
-  run(openclaw, ["plugins", "install", "--force", pluginPath], {
+  run(openclaw, [
+    "plugins",
+    "install",
+    "--force",
+    "--accept-capabilities",
+    `npm-pack:${tarball}`,
+  ], {
     env: isolatedEnv,
   });
   run(

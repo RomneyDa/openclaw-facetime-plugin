@@ -17,6 +17,8 @@ export class FaceTimeAvatarRuntime {
   #rendererError?: string;
   #activeSessionId: string | null = null;
   #callDroppedStart = 0;
+  #hadReadyRenderer = false;
+  #lastTransportDrops = 0;
 
   constructor(params: {
     account: ResolvedFaceTimeAccount;
@@ -65,11 +67,14 @@ export class FaceTimeAvatarRuntime {
       if (this.#activeSessionId) this.renderer.consumer.end("replaced");
       this.#activeSessionId = sessionId;
       this.#callDroppedStart = this.#droppedBytes();
+      this.#hadReadyRenderer = false;
+      this.#lastTransportDrops = this.renderer.snapshot().droppedTransportMedia;
       this.renderer.consumer.start({ sessionId, video: this.video, initialState: "listening" });
     } catch (error) {
       this.#activeSessionId = null;
       this.#recordRendererError(error);
     }
+    if (!this.#activeSessionId) return;
     try {
       await this.obs?.startVirtualCamera();
     } catch (error) {
@@ -81,9 +86,19 @@ export class FaceTimeAvatarRuntime {
   sendAudio(audio: Uint8Array, ptsMs: number): boolean {
     if (!this.#activeSessionId) return false;
     try {
-      return this.renderer.consumer.audio(audio, ptsMs);
+      const accepted = this.renderer.consumer.audio(audio, ptsMs);
+      const snapshot = this.renderer.snapshot();
+      if (snapshot.readyClients > 0) this.#hadReadyRenderer = true;
+      const overflowed = snapshot.droppedTransportMedia > this.#lastTransportDrops;
+      this.#lastTransportDrops = snapshot.droppedTransportMedia;
+      if (snapshot.rendererError || overflowed || (!accepted && this.#hadReadyRenderer)) {
+        this.#degradeVideo(
+          snapshot.rendererError ?? (overflowed ? "renderer transport overflow" : "renderer disconnected"),
+        );
+      }
+      return accepted;
     } catch (error) {
-      this.#recordRendererError(error);
+      this.#degradeVideo(error instanceof Error ? error.message : String(error));
       return false;
     }
   }
@@ -135,8 +150,10 @@ export class FaceTimeAvatarRuntime {
 
   async stop(): Promise<void> {
     this.#activeSessionId = null;
-    await this.obs?.stop();
-    await this.renderer.stop();
+    const results = await Promise.allSettled([this.obs?.stop(), this.renderer.stop()]);
+    for (const result of results) {
+      if (result.status === "rejected") this.#recordRendererError(result.reason);
+    }
   }
 
   #droppedBytes(): number {
@@ -146,5 +163,13 @@ export class FaceTimeAvatarRuntime {
   #recordRendererError(error: unknown): void {
     this.#rendererError = error instanceof Error ? error.message : String(error);
     this.logger.warn?.(`[facetime-avatar] renderer degraded: ${this.#rendererError}`);
+  }
+
+  #degradeVideo(reason: string): void {
+    this.#recordRendererError(reason);
+    void this.obs?.stopVirtualCamera().catch((error) => {
+      this.#obsError = error instanceof Error ? error.message : String(error);
+      this.logger.warn?.(`[facetime-avatar] audio-only fallback could not stop Virtual Camera: ${this.#obsError}`);
+    });
   }
 }

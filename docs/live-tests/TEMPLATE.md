@@ -24,6 +24,10 @@
 | Local and remote hangup | | |
 | Gateway restart recovery | | |
 | Avatar visible and synchronized | | |
+| Exact provider PCM drives mouth motion | | |
+| Renderer failure continues audio-only | | |
+| OBS/Virtual Camera failure continues audio-only | | |
+| Next call starts without stale audio/video state | | |
 
 ## Measurements
 
@@ -38,6 +42,7 @@
 - Native helper absent:
 - Capture and playback stopped:
 - BlackHole/renderer queues empty:
+- OBS Virtual Camera stopped:
 - Gateway restarted and another call accepted:
 
 Do not attach raw audio, credentials, full transcripts, phone numbers, email addresses, or unredacted screenshots.

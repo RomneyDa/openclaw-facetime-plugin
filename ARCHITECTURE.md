@@ -1,100 +1,69 @@
 # Architecture
 
-## Reference shape
+## Ownership
 
-This plugin follows the shape established by Dallin's recent Linq channel work:
+FaceTime owns the call and the one realtime conversation: caller policy, ScreenCaptureKit input,
+the registered OpenClaw realtime provider, agent consults, sequencing/interruption, exact provider
+PCM, the A/V pacer, BlackHole output, OBS/Virtual Camera control, and call cleanup.
 
-- Linq PR #5: explicit provider contracts, target grammar, focused modules and tests.
-- Linq PR #7: setup owns intentional mutations while runtime/status remain bounded.
-- Linq PR #10: channel runtime SDK alignment, setup/runtime split, canonical sessions, and lifecycle
-  cleanup.
-- Linq PR #12: truthful onboarding, schema parity, package/load verification, and concrete readiness
-  output.
-- Linq issue #11 Phase 7: realtime provider integration, one-call concurrency, deterministic busy
-  behavior, barge-in, restart cleanup, diagnostics, privacy, and live proof.
-
-Issue #11 correctly distinguishes Linq's unreleased provider-hosted FaceTime API from the local
-FaceTime/ScreenCaptureKit/BlackHole bridge. This repository implements only the local Mac bridge.
-It does not call undocumented Linq endpoints and is not a production transport for the Linq plugin.
-
-## Module boundary
+`openclaw-avatar-plugin/renderer` owns only the Canvas2D lobster, canonical media/control events,
+authenticated loopback host, bounded renderer queues, generation fencing, PCM/viseme mouth motion,
+readiness, health, and metrics. It has no provider, microphone, OpenClaw runtime, FaceTime,
+BlackHole, or OBS knowledge.
 
 ```text
-index.ts / setup-entry.ts
-  -> channel-base.ts       static channel/config/setup contract
-  -> channel.ts            OpenClaw lifecycle, status, outbound adapter
-  -> facetime/accounts.ts  recursive account resolution
-  -> facetime/call-manager.ts
-       one-call state machine and caller policy
-       -> facetime/native-bridge.ts
-            bounded framed stdio
-            -> Swift helper
-                 Accessibility call control
-                 ScreenCaptureKit FaceTime audio capture
-                 AVAudioEngine/CoreAudio BlackHole output
-       -> facetime/realtime.ts
-            registered OpenClaw realtime provider
-            createRealtimeVoiceBridgeSession
-            openclaw_agent_consult
-            -> facetime/output-pacer.ts
-                 bounded configurable BlackHole delay
-                 atomic native/avatar clear
-                 -> avatar/runtime.ts
-                      loopback authenticated PCM server
-                      HeadAudio + TalkingHead browser bundle
-                      optional authenticated OBS scene/virtual camera
+FaceTime caller audio
+  -> ScreenCaptureKit
+  -> one FaceTime-owned OpenClaw realtime provider session
+
+exact provider PCM
+  -> FaceTimeOutputPacer (sample clock and synchronization owner)
+       -> avatar consumer with sample-derived PTS
+       -> bounded delayed BlackHole playback
+
+authenticated renderer URL
+  -> FaceTime-owned OBS Browser Source
+  -> OBS Virtual Camera
+  -> FaceTime video
 ```
 
-The Swift process never receives OpenAI credentials. The TypeScript plugin never imports private
-FaceTime frameworks. That separation keeps macOS entitlements/UI automation local and lets OpenClaw
-own provider auth, models, tool execution, and agent sessions.
+There is no plugin registry, global singleton, Talk observer, or second provider/session path.
 
-## IPC
+## IPC and media
 
-Both directions use a five-byte header followed by payload:
+The native helper uses a five-byte framed-stdio header: one kind byte followed by a four-byte
+big-endian payload length. JSON and PCM payloads are independently capped at 256 KiB. Input and
+output are signed PCM16LE, 24 kHz, mono.
 
-```text
-byte 0      kind: 1 JSON control/event, 2 PCM16 audio
-bytes 1..4  unsigned big-endian payload length
-bytes 5..N  payload
-```
+`FaceTimeOutputPacer` derives renderer presentation time solely from emitted samples (`samples /
+24` milliseconds). It hands the same bytes to the avatar immediately, bounds and delays the
+BlackHole copy, and resets the sample clock on clear. Barge-in, cancellation, replacement, hangup,
+and error synchronously cancel delayed timers, clear native playback, and advance the avatar
+generation before later media can be accepted.
 
-JSON and audio payloads are independently capped at 256 KiB. TypeScript caps queued provider output
-at 2 MiB and drops audio when the virtual-device sink remains backpressured. Control frames are never
-silently dropped.
+## Failure behavior
 
-## Audio contract
-
-- Input and output: signed PCM16 little-endian, 24,000 Hz, mono.
-- ScreenCaptureKit is configured for FaceTime app-window audio and excludes the helper's own audio.
-- OpenClaw's realtime provider must advertise PCM16 24 kHz support.
-- Output is scheduled through AVAudioEngine whose HAL output device is `BlackHole 2ch`.
-- Provider barge-in invokes `clear-audio`, which resets the AVAudioPlayerNode queue.
-- When the avatar is enabled, a bounded A/V pacer sends PCM to the renderer immediately and delays
-  BlackHole by `audioDelayMs` (80 ms by default). Clearing the pacer cancels delayed chunks and clears
-  both sinks atomically.
-
-## Avatar contract
-
-- The renderer binds only `127.0.0.1` and authenticates WebSocket upgrades with a random token.
-- Per-client buffered output defaults to 1 MiB; disconnected or slow renderers increment drop
-  counters rather than applying backpressure to the call.
-- HeadAudio performs local audio-driven viseme inference. The built-in procedural preset requires no
-  likeness asset; an optional CORS-enabled TalkingHead GLB may drive Oculus viseme blend shapes.
-- Browser audio terminates at HeadAudio's zero-output AudioWorklet and is never connected to the
-  physical output device.
-- OBS credentials are read from an environment variable. Control is restricted to loopback, creates
-  a dedicated scene/browser source, and verifies that Virtual Camera actually became active.
-- Renderer/OBS failures are reported as degraded status and do not terminate the audio call.
+Renderer queue overflow, disconnect, startup failure, and OBS/Virtual Camera failure are recorded
+in FaceTime status and degrade video to audio-only. They never close an otherwise healthy realtime
+or native call. Native or realtime fatal failures still end the call.
 
 ## Lifecycle invariants
 
-1. One `FaceTimeCallManager` owns one configured account identity.
-2. At most one active call exists per manager.
-3. Unknown inbound callers fail closed unless `inboundPolicy=open`.
-4. A concurrent inbound call receives `decline(reason=busy)` and never starts provider/agent work.
-5. Realtime starts only after native FaceTime state is `connected`.
-6. Any native/realtime fatal error hangs up and releases local call state.
-7. Gateway abort hangs up, closes realtime, stops ScreenCaptureKit/BlackHole, and terminates the helper.
-8. No raw audio is persisted by this plugin.
-9. Virtual Camera starts only for a connected call and stops with that call.
+1. A call starts at most one realtime provider session and one avatar consumer session.
+2. Realtime starts only after native FaceTime reports `connected`.
+3. A concurrent call is rejected before provider or avatar work.
+4. Call replacement and clear generation-fence all older avatar media.
+5. Hangup closes realtime, clears delayed/native/avatar audio, ends the avatar session, and stops
+   Virtual Camera.
+6. Gateway shutdown additionally stops the renderer host, OBS connection, native helper, sockets,
+   and timers.
+7. No raw audio, credentials, transcripts, or renderer tokens are persisted.
+
+## OpenClaw SDK status
+
+Validated against `openclaw@2026.9.3` / current main. Ordinary imports use current narrow public
+subpaths. The realtime module is still present at runtime, but current source labels it a
+production-private seam for bundled and separately published official plugins, and the npm package
+omits its declarations. `realtime-sdk.ts` isolates the exact runtime shape needed here so tests can
+exercise current behavior; external publication remains blocked until OpenClaw gives this plugin an
+official supported-package contract or promotes an equivalent public seam.
