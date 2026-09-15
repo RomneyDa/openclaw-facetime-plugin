@@ -22,15 +22,11 @@ const entries = pack.files.map((file) => file.path).sort();
 const required = [
   "ARCHITECTURE.md",
   "LICENSE",
-  "PLAN.md",
   "README.md",
   "dist/index.mjs",
   "dist/setup-entry.mjs",
   "dist/avatar-preview.mjs",
   "dist/avatar-obs-smoke.mjs",
-  "dist/avatar/avatar.js",
-  "dist/avatar/headworklet.mjs",
-  "dist/avatar/model-en-mixed.bin",
   "index.ts",
   "native/Package.swift",
   "native/bin/openclaw-facetime-bridge",
@@ -49,12 +45,15 @@ if ((fs.statSync(nativeHelper).mode & 0o111) === 0) {
   throw new Error("Packaged native helper is not executable");
 }
 const forbidden = entries.filter((entry) =>
-  /(^|\/)(?:node_modules|tmp|coverage|\.git|\.worktrees)(?:\/|$)|\.test\.[cm]?[jt]s$|native\/\.build\//u.test(
+  /^(?:avatar)(?:\/|$)|(^|\/)(?:node_modules|tmp|coverage|\.git|\.worktrees)(?:\/|$)|\.test\.[cm]?[jt]s$|native\/\.build\//u.test(
     entry,
   ),
 );
 if (forbidden.length > 0) {
   throw new Error(`Package contains forbidden entries:\n${forbidden.join("\n")}`);
+}
+if (entries.some((entry) => /(?:headworklet|playback-worklet|model-en-mixed|avatar\/avatar\.js)/u.test(entry))) {
+  throw new Error("Package still contains the removed copied avatar stack");
 }
 
 const secretPatterns = [

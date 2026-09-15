@@ -1,4 +1,4 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import { DEFAULT_ACCOUNT_ID, type ChannelPlugin } from "openclaw/plugin-sdk/core";
 import type { RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
 import { createFaceTimePluginBase } from "./channel-base.js";

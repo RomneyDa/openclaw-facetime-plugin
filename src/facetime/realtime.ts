@@ -1,4 +1,4 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
 import {
   consultRealtimeVoiceAgent,
@@ -9,7 +9,7 @@ import {
   resolveRealtimeVoiceAgentConsultToolsAllow,
   type RealtimeVoiceBridgeSession,
   type RealtimeVoiceToolCallEvent,
-} from "openclaw/plugin-sdk/realtime-voice";
+} from "./realtime-sdk.js";
 import type { FaceTimeOutputPacer } from "./output-pacer.js";
 import { faceTimePeerId } from "./targets.js";
 import { FACETIME_AUDIO_FORMAT, type ResolvedFaceTimeAccount } from "./types.js";
@@ -106,7 +106,7 @@ export async function startFaceTimeRealtimeSession(params: {
         params.output.send(audio);
       },
       clearAudio: () => {
-        params.output.clear();
+        params.output.clear("barge-in");
       },
     },
     onTranscript: (role, text, final) => {
@@ -116,10 +116,14 @@ export async function startFaceTimeRealtimeSession(params: {
           transcript.splice(0, transcript.length - 40);
         }
       }
+      if (final) params.output.state(role === "user" ? "thinking" : "listening");
       params.onTranscript?.(role, text, final);
     },
     onToolCall: (event) => handleToolCall(event),
-    onReady: () => params.onReady?.(resolved.provider.id),
+    onReady: () => {
+      params.output.state("listening");
+      params.onReady?.(resolved.provider.id);
+    },
     onError: (error) => params.logger.warn?.(`[facetime] realtime error: ${error.message}`),
     onClose: params.onClose,
   });

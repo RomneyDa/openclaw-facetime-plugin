@@ -56,7 +56,6 @@ export const FaceTimeAvatarConfigSchema = z
   .object({
     enabled: z.boolean().default(false).optional(),
     port: z.number().int().min(1).max(65_535).default(18_794).optional(),
-    modelUrl: nonEmpty.optional(),
     audioDelayMs: z.number().int().min(0).max(500).default(80).optional(),
     maxBufferedBytes: z.number().int().min(65_536).max(8 * 1024 * 1024).default(1_048_576).optional(),
     obs: z
@@ -132,7 +131,6 @@ const avatarJsonSchema = {
   properties: {
     enabled: { type: "boolean", default: false },
     port: { type: "integer", minimum: 1, maximum: 65_535, default: 18_794 },
-    modelUrl: { type: "string", minLength: 1 },
     audioDelayMs: { type: "integer", minimum: 0, maximum: 500, default: 80 },
     maxBufferedBytes: {
       type: "integer",

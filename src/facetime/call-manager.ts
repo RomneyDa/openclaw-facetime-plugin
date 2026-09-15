@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
-import type { RealtimeVoiceBridgeSession } from "openclaw/plugin-sdk/realtime-voice";
+import type { RealtimeVoiceBridgeSession } from "./realtime-sdk.js";
 import { FaceTimeAvatarRuntime } from "../avatar/runtime.js";
 import { FaceTimeNativeBridge } from "./native-bridge.js";
 import { FaceTimeOutputPacer } from "./output-pacer.js";
@@ -67,6 +67,10 @@ export class FaceTimeCallManager {
   #started = false;
   #stopping = false;
   readonly #startRealtime: typeof startFaceTimeRealtimeSession;
+  readonly #createAvatar: (params: {
+    account: ResolvedFaceTimeAccount;
+    logger: RuntimeLogger;
+  }) => FaceTimeAvatarRuntime;
   readonly #onBridgeEvent = (event: FaceTimeNativeEvent) => {
     void this.#handleNativeEvent(event).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -102,6 +106,10 @@ export class FaceTimeCallManager {
     logger: RuntimeLogger;
     bridge?: FaceTimeNativeBridge;
     startRealtime?: typeof startFaceTimeRealtimeSession;
+    createAvatar?: (params: {
+      account: ResolvedFaceTimeAccount;
+      logger: RuntimeLogger;
+    }) => FaceTimeAvatarRuntime;
   }) {
     this.account = params.account;
     this.cfg = params.cfg;
@@ -114,6 +122,8 @@ export class FaceTimeCallManager {
         logger: params.logger,
       });
     this.#startRealtime = params.startRealtime ?? startFaceTimeRealtimeSession;
+    this.#createAvatar =
+      params.createAvatar ?? ((avatarParams) => new FaceTimeAvatarRuntime(avatarParams));
   }
 
   async start(signal?: AbortSignal): Promise<void> {
@@ -138,7 +148,7 @@ export class FaceTimeCallManager {
         channels: 1,
       });
       if (this.account.config.avatar?.enabled) {
-        const avatar = new FaceTimeAvatarRuntime({ account: this.account, logger: this.logger });
+        const avatar = this.#createAvatar({ account: this.account, logger: this.logger });
         try {
           await avatar.start();
           this.#avatar = avatar;
@@ -395,7 +405,13 @@ export class FaceTimeCallManager {
   }
 
   async #startRealtimeForCall(call: FaceTimeCallSnapshot): Promise<void> {
-    await this.#avatar?.beginCall(call.id);
+    try {
+      await this.#avatar?.beginCall(call.id);
+    } catch (error) {
+      this.logger.warn?.(
+        `[facetime-avatar] call rendering disabled: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     const outputPacer = new FaceTimeOutputPacer({
       nativeBridge: this.bridge,
       avatar: this.#avatar ?? undefined,
@@ -488,7 +504,7 @@ export class FaceTimeCallManager {
     }
     const outputPacer = this.#outputPacer;
     this.#outputPacer = null;
-    outputPacer?.clear();
+    outputPacer?.clear(state === "failed" ? "error" : "hangup");
     if (outputPacer?.droppedBytes) {
       call.outputDroppedBytes = outputPacer.droppedBytes;
     }

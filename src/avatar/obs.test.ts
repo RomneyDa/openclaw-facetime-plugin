@@ -37,7 +37,10 @@ describe("FaceTime OBS controller", () => {
       expect.objectContaining({
         inputName: "OpenClaw Avatar Renderer",
         inputKind: "browser_source",
-        inputSettings: expect.objectContaining({ reroute_audio: false }),
+        inputSettings: expect.objectContaining({
+          url: "http://127.0.0.1:18794/?token=secret",
+          reroute_audio: false,
+        }),
       }),
     );
     expect(call).toHaveBeenCalledWith("StartVirtualCam");

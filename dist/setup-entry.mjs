@@ -14674,7 +14674,6 @@ var FaceTimeRealtimeConfigSchema = external_exports.object({
 var FaceTimeAvatarConfigSchema = external_exports.object({
   enabled: external_exports.boolean().default(false).optional(),
   port: external_exports.number().int().min(1).max(65535).default(18794).optional(),
-  modelUrl: nonEmpty.optional(),
   audioDelayMs: external_exports.number().int().min(0).max(500).default(80).optional(),
   maxBufferedBytes: external_exports.number().int().min(65536).max(8 * 1024 * 1024).default(1048576).optional(),
   obs: external_exports.object({
@@ -14736,7 +14735,6 @@ var avatarJsonSchema = {
   properties: {
     enabled: { type: "boolean", default: false },
     port: { type: "integer", minimum: 1, maximum: 65535, default: 18794 },
-    modelUrl: { type: "string", minLength: 1 },
     audioDelayMs: { type: "integer", minimum: 0, maximum: 500, default: 80 },
     maxBufferedBytes: {
       type: "integer",
@@ -15019,7 +15017,6 @@ function createFaceTimePluginBase() {
       selectionLabel: "FaceTime Audio (macOS)",
       docsPath: "/channels/facetime",
       blurb: "Answer and place FaceTime Audio calls through a realtime voice agent on this Mac.",
-      showInSetup: true,
       quickstartAllowFrom: true
     },
     setupWizard: faceTimeOnboardingAdapter,

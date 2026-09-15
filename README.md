@@ -30,7 +30,7 @@ control API; answer/dial/hangup use macOS Accessibility against FaceTime's UI.
 
 - macOS 13 or newer
 - FaceTime.app signed in to the identity dedicated to the agent
-- OpenClaw `>=2026.7.2-beta.1`
+- OpenClaw `>=2026.9.3`
 - Apple Silicon Mac (`arm64`); Intel is not claimed or packaged in the first release
 - Xcode Command Line Tools (`xcode-select --install`) only when building the Swift helper from source
 - [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole) as a required **system peer dependency**
@@ -138,17 +138,14 @@ under `realtime.providers.<provider>`; for OpenAI, prefer the host's configured 
 
 ## Optional video avatar
 
-The default renderer is a bundled procedural preset driven by
-[HeadAudio](https://github.com/met4citizen/HeadAudio) 0.1.0. It consumes the same PCM16 24 kHz
-provider chunks as BlackHole, runs entirely in a browser AudioWorklet, and has no audible browser
-output. Set `avatar.modelUrl` to a CORS-enabled TalkingHead-compatible GLB to replace the preset with
-[TalkingHead](https://github.com/met4citizen/TalkingHead) 1.7.0. The GLB must have its own valid
-redistribution rights; this repository does not bundle a third-party likeness.
+The video path uses `openclaw-avatar-plugin/renderer`, a code-native Canvas2D lobster with no remote
+assets or audible browser output. FaceTime starts the authenticated loopback renderer, gives its
+tokenized URL to a FaceTime-owned OBS Browser Source, and sends it the exact PCM already accepted by
+`FaceTimeOutputPacer`. Presentation timestamps come from emitted sample counts, never wall clock.
 
-The loopback renderer requires an unguessable per-process token and bounds each WebSocket client.
-`audioDelayMs` delays BlackHole by 80 ms by default to compensate for HeadAudio's processing window.
-Barge-in, hangup, and provider cancellation clear delayed BlackHole chunks and renderer state in one
-operation. Avatar failure degrades to audio-only calling.
+`audioDelayMs` applies only to bounded BlackHole playback; the avatar package is unaware of that
+delay. Barge-in, cancellation, hangup, replacement, and error clear delayed BlackHole and avatar
+media together. Renderer or OBS failure is visible in status and degrades to audio-only calling.
 
 Preview the renderer with synthetic PCM:
 
@@ -166,6 +163,15 @@ For FaceTime video output:
    Extensions → OBS Virtual Camera**, then restart OBS.
 5. Enable `avatar.obs` as shown above. The plugin creates only its dedicated scene/source, switches
    to that scene, starts the virtual camera when a call connects, and stops it when the call ends.
+
+### OpenClaw SDK compatibility
+
+This checkout is validated against `openclaw@2026.9.3`. OpenClaw currently describes
+`openclaw/plugin-sdk/realtime-voice` as a production-private seam for official plugins and omits its
+declarations from the npm package. The runtime export still exists and is isolated in
+`src/facetime/realtime-sdk.ts`, but publishing this repository as a supported third-party plugin is
+blocked until OpenClaw grants it an official-plugin contract or promotes an equivalent public API.
+The avatar integration does not require or use `api.runtime.talk.openSession`.
 
 OBS connection or Camera Extension errors appear in `facetime_call` status while audio remains
 available. OBS's browser source is configured with audio rerouting disabled to prevent echo.

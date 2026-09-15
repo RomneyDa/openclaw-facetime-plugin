@@ -1,25 +1,12 @@
-# Automated Avatar Evidence
+# Evidence status
 
-## 2026-07-16 renderer smoke
+The prior screenshots exercised the removed copied HeadAudio/TalkingHead renderer and were deleted
+with that stack. They are not evidence for the reusable lobster renderer integration.
 
-- Host: Apple Silicon macOS reference development machine.
-- Input: `npm run avatar:preview`, which streams generated PCM16 24 kHz mono samples.
-- Browser: a clean headless Chrome process against the loopback-only renderer URL.
-- Observed state: HeadAudio worklet and model initialized; the page reported
-  `ready · streaming` at 1280×720.
-- Capture: [`avatar-preset.png`](./avatar-preset.png).
+Automated proof now lives in the package tests: the avatar repository owns real-browser visual and
+readiness smoke, while this repository proves one realtime session, one avatar consumer, exact PCM,
+sample-clock timing, atomic clear, generation fencing, authenticated OBS URL delivery, cleanup, and
+audio-only degradation.
 
-## 2026-07-16 OBS browser-source smoke
-
-- OBS Studio 32.1.2 connected through authenticated obs-websocket on loopback.
-- The controller selected its dedicated `OpenClaw FaceTime Avatar` scene and attached the
-  `OpenClaw Avatar Renderer` browser source at 1280×720.
-- After a clean OBS restart, the renderer health endpoint reported one connected, ready client and
-  increasing sent-byte counters.
-- OBS `GetSourceScreenshot` captured [`obs-browser-source.png`](./obs-browser-source.png) while the
-  page reported `ready · streaming`.
-
-This proves the bundled procedural renderer and local audio-analysis path load without CUDA. It does
-prove the OBS browser-source path. It does not prove OBS Virtual Camera or FaceTime video routing;
-macOS still reports the OBS Camera Extension as `activated waiting for user`. Those remain live-Mac
-gates in `PLAN.md`.
+No new live FaceTime evidence is checked in yet. Complete `docs/live-tests/TEMPLATE.md` on the target
+Mac before making FaceTime video, Virtual Camera, or calibrated A/V alignment claims.

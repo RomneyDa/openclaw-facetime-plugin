@@ -1009,7 +1009,7 @@ var require_permessage_deflate = __commonJS({
     var kBuffers = Symbol("buffers");
     var kError = Symbol("error");
     var zlibLimiter;
-    var PerMessageDeflate2 = class {
+    var PerMessageDeflate = class {
       /**
        * Creates a PerMessageDeflate instance.
        *
@@ -1122,7 +1122,7 @@ var require_permessage_deflate = __commonJS({
       acceptAsServer(offers) {
         const opts = this._options;
         const accepted = offers.find((params) => {
-          if (opts.serverNoContextTakeover === false && params.server_no_context_takeover || params.server_max_window_bits && (opts.serverMaxWindowBits === false || typeof opts.serverMaxWindowBits === "number" && opts.serverMaxWindowBits > params.server_max_window_bits) || typeof opts.clientMaxWindowBits === "number" && !params.client_max_window_bits) {
+          if (opts.serverNoContextTakeover === false && params.server_no_context_takeover || params.server_max_window_bits && (opts.serverMaxWindowBits === false || typeof opts.serverMaxWindowBits === "number" && opts.serverMaxWindowBits > params.server_max_window_bits) || typeof opts.clientMaxWindowBits === "number" && (typeof params.client_max_window_bits === "number" ? opts.clientMaxWindowBits > params.client_max_window_bits : !params.client_max_window_bits)) {
             return false;
           }
           return true;
@@ -1347,7 +1347,7 @@ var require_permessage_deflate = __commonJS({
         });
       }
     };
-    module.exports = PerMessageDeflate2;
+    module.exports = PerMessageDeflate;
     function deflateOnData(chunk) {
       this[kBuffers].push(chunk);
       this[kTotalLength] += chunk.length;
@@ -1582,7 +1582,7 @@ var require_receiver = __commonJS({
   "node_modules/ws/lib/receiver.js"(exports2, module) {
     "use strict";
     var { Writable } = __require("stream");
-    var PerMessageDeflate2 = require_permessage_deflate();
+    var PerMessageDeflate = require_permessage_deflate();
     var {
       BINARY_TYPES,
       EMPTY_BUFFER,
@@ -1599,7 +1599,7 @@ var require_receiver = __commonJS({
     var GET_DATA = 4;
     var INFLATING = 5;
     var DEFER_EVENT = 6;
-    var Receiver2 = class extends Writable {
+    var Receiver = class extends Writable {
       /**
        * Creates a Receiver instance.
        *
@@ -1768,7 +1768,7 @@ var require_receiver = __commonJS({
           return;
         }
         const compressed = (buf[0] & 64) === 64;
-        if (compressed && !this._extensions[PerMessageDeflate2.extensionName]) {
+        if (compressed && !this._extensions[PerMessageDeflate.extensionName]) {
           const error51 = this.createError(
             RangeError,
             "RSV1 must be clear",
@@ -2023,7 +2023,7 @@ var require_receiver = __commonJS({
        * @private
        */
       decompress(data, cb) {
-        const perMessageDeflate = this._extensions[PerMessageDeflate2.extensionName];
+        const perMessageDeflate = this._extensions[PerMessageDeflate.extensionName];
         perMessageDeflate.decompress(data, this._fin, (err, buf) => {
           if (err) return cb(err);
           if (buf.length) {
@@ -2196,7 +2196,7 @@ var require_receiver = __commonJS({
         return err;
       }
     };
-    module.exports = Receiver2;
+    module.exports = Receiver;
   }
 });
 
@@ -2209,7 +2209,7 @@ var require_sender = __commonJS({
     var {
       types: { isUint8Array }
     } = __require("util");
-    var PerMessageDeflate2 = require_permessage_deflate();
+    var PerMessageDeflate = require_permessage_deflate();
     var { EMPTY_BUFFER, kWebSocket, NOOP } = require_constants();
     var { isBlob, isValidStatusCode } = require_validation();
     var { mask: applyMask, toBuffer } = require_buffer_util();
@@ -2221,7 +2221,7 @@ var require_sender = __commonJS({
     var DEFAULT = 0;
     var DEFLATING = 1;
     var GET_BLOB_DATA = 2;
-    var Sender2 = class _Sender {
+    var Sender = class _Sender {
       /**
        * Creates a Sender instance.
        *
@@ -2495,7 +2495,7 @@ var require_sender = __commonJS({
        * @public
        */
       send(data, options, cb) {
-        const perMessageDeflate = this._extensions[PerMessageDeflate2.extensionName];
+        const perMessageDeflate = this._extensions[PerMessageDeflate.extensionName];
         let opcode = options.binary ? 2 : 1;
         let rsv1 = options.compress;
         let byteLength;
@@ -2619,7 +2619,7 @@ var require_sender = __commonJS({
           this.sendFrame(_Sender.frame(data, options), cb);
           return;
         }
-        const perMessageDeflate = this._extensions[PerMessageDeflate2.extensionName];
+        const perMessageDeflate = this._extensions[PerMessageDeflate.extensionName];
         this._bufferedBytes += options[kByteLength];
         this._state = DEFLATING;
         perMessageDeflate.compress(data, options.fin, (_, buf) => {
@@ -2677,7 +2677,7 @@ var require_sender = __commonJS({
         }
       }
     };
-    module.exports = Sender2;
+    module.exports = Sender;
     function callCallbacks(sender, err, cb) {
       if (typeof cb === "function") cb(err);
       for (let i = 0; i < sender._queue.length; i++) {
@@ -3057,11 +3057,11 @@ var require_extension = __commonJS({
       return offers;
     }
     function format(extensions) {
-      return Object.keys(extensions).map((extension2) => {
-        let configurations = extensions[extension2];
+      return Object.keys(extensions).map((extension) => {
+        let configurations = extensions[extension];
         if (!Array.isArray(configurations)) configurations = [configurations];
         return configurations.map((params) => {
-          return [extension2].concat(
+          return [extension].concat(
             Object.keys(params).map((k) => {
               let values = params[k];
               if (!Array.isArray(values)) values = [values];
@@ -3084,12 +3084,12 @@ var require_websocket = __commonJS({
     var http = __require("http");
     var net = __require("net");
     var tls = __require("tls");
-    var { randomBytes: randomBytes2, createHash: createHash2 } = __require("crypto");
+    var { randomBytes, createHash: createHash2 } = __require("crypto");
     var { Duplex, Readable } = __require("stream");
     var { URL: URL2 } = __require("url");
-    var PerMessageDeflate2 = require_permessage_deflate();
-    var Receiver2 = require_receiver();
-    var Sender2 = require_sender();
+    var PerMessageDeflate = require_permessage_deflate();
+    var Receiver = require_receiver();
+    var Sender = require_sender();
     var { isBlob } = require_validation();
     var {
       BINARY_TYPES,
@@ -3111,7 +3111,7 @@ var require_websocket = __commonJS({
     var protocolVersions = [8, 13];
     var readyStates = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
     var subprotocolRegex = /^[!#$%&'*+\-.0-9A-Z^_`|a-z~]+$/;
-    var WebSocket2 = class _WebSocket extends EventEmitter3 {
+    var WebSocket = class _WebSocket extends EventEmitter3 {
       /**
        * Create a new `WebSocket`.
        *
@@ -3256,7 +3256,7 @@ var require_websocket = __commonJS({
        * @private
        */
       setSocket(socket, head, options) {
-        const receiver = new Receiver2({
+        const receiver = new Receiver({
           allowSynchronousEvents: options.allowSynchronousEvents,
           binaryType: this.binaryType,
           extensions: this._extensions,
@@ -3266,7 +3266,7 @@ var require_websocket = __commonJS({
           maxPayload: options.maxPayload,
           skipUTF8Validation: options.skipUTF8Validation
         });
-        const sender = new Sender2(socket, this._extensions, options.generateMask);
+        const sender = new Sender(socket, this._extensions, options.generateMask);
         this._receiver = receiver;
         this._sender = sender;
         this._socket = socket;
@@ -3301,8 +3301,8 @@ var require_websocket = __commonJS({
           this.emit("close", this._closeCode, this._closeMessage);
           return;
         }
-        if (this._extensions[PerMessageDeflate2.extensionName]) {
-          this._extensions[PerMessageDeflate2.extensionName].cleanup();
+        if (this._extensions[PerMessageDeflate.extensionName]) {
+          this._extensions[PerMessageDeflate.extensionName].cleanup();
         }
         this._receiver.removeAllListeners();
         this._readyState = _WebSocket.CLOSED;
@@ -3464,7 +3464,7 @@ var require_websocket = __commonJS({
           fin: true,
           ...options
         };
-        if (!this._extensions[PerMessageDeflate2.extensionName]) {
+        if (!this._extensions[PerMessageDeflate.extensionName]) {
           opts.compress = false;
         }
         this._sender.send(data || EMPTY_BUFFER, opts, cb);
@@ -3487,35 +3487,35 @@ var require_websocket = __commonJS({
         }
       }
     };
-    Object.defineProperty(WebSocket2, "CONNECTING", {
+    Object.defineProperty(WebSocket, "CONNECTING", {
       enumerable: true,
       value: readyStates.indexOf("CONNECTING")
     });
-    Object.defineProperty(WebSocket2.prototype, "CONNECTING", {
+    Object.defineProperty(WebSocket.prototype, "CONNECTING", {
       enumerable: true,
       value: readyStates.indexOf("CONNECTING")
     });
-    Object.defineProperty(WebSocket2, "OPEN", {
+    Object.defineProperty(WebSocket, "OPEN", {
       enumerable: true,
       value: readyStates.indexOf("OPEN")
     });
-    Object.defineProperty(WebSocket2.prototype, "OPEN", {
+    Object.defineProperty(WebSocket.prototype, "OPEN", {
       enumerable: true,
       value: readyStates.indexOf("OPEN")
     });
-    Object.defineProperty(WebSocket2, "CLOSING", {
+    Object.defineProperty(WebSocket, "CLOSING", {
       enumerable: true,
       value: readyStates.indexOf("CLOSING")
     });
-    Object.defineProperty(WebSocket2.prototype, "CLOSING", {
+    Object.defineProperty(WebSocket.prototype, "CLOSING", {
       enumerable: true,
       value: readyStates.indexOf("CLOSING")
     });
-    Object.defineProperty(WebSocket2, "CLOSED", {
+    Object.defineProperty(WebSocket, "CLOSED", {
       enumerable: true,
       value: readyStates.indexOf("CLOSED")
     });
-    Object.defineProperty(WebSocket2.prototype, "CLOSED", {
+    Object.defineProperty(WebSocket.prototype, "CLOSED", {
       enumerable: true,
       value: readyStates.indexOf("CLOSED")
     });
@@ -3528,10 +3528,10 @@ var require_websocket = __commonJS({
       "readyState",
       "url"
     ].forEach((property) => {
-      Object.defineProperty(WebSocket2.prototype, property, { enumerable: true });
+      Object.defineProperty(WebSocket.prototype, property, { enumerable: true });
     });
     ["open", "error", "close", "message"].forEach((method) => {
-      Object.defineProperty(WebSocket2.prototype, `on${method}`, {
+      Object.defineProperty(WebSocket.prototype, `on${method}`, {
         enumerable: true,
         get() {
           for (const listener of this.listeners(method)) {
@@ -3553,9 +3553,9 @@ var require_websocket = __commonJS({
         }
       });
     });
-    WebSocket2.prototype.addEventListener = addEventListener;
-    WebSocket2.prototype.removeEventListener = removeEventListener;
-    module.exports = WebSocket2;
+    WebSocket.prototype.addEventListener = addEventListener;
+    WebSocket.prototype.removeEventListener = removeEventListener;
+    module.exports = WebSocket;
     function initAsClient(websocket, address, protocols, options) {
       const opts = {
         allowSynchronousEvents: true,
@@ -3622,7 +3622,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes2(16).toString("base64");
+      const key = randomBytes(16).toString("base64");
       const request = isSecure ? https.request : http.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -3640,13 +3640,13 @@ var require_websocket = __commonJS({
       opts.path = parsedUrl.pathname + parsedUrl.search;
       opts.timeout = opts.handshakeTimeout;
       if (opts.perMessageDeflate) {
-        perMessageDeflate = new PerMessageDeflate2({
+        perMessageDeflate = new PerMessageDeflate({
           ...opts.perMessageDeflate,
           isServer: false,
           maxPayload: opts.maxPayload
         });
         opts.headers["Sec-WebSocket-Extensions"] = format({
-          [PerMessageDeflate2.extensionName]: perMessageDeflate.offer()
+          [PerMessageDeflate.extensionName]: perMessageDeflate.offer()
         });
       }
       if (protocols.length) {
@@ -3745,7 +3745,7 @@ var require_websocket = __commonJS({
       });
       req.on("upgrade", (res, socket, head) => {
         websocket.emit("upgrade", res);
-        if (websocket.readyState !== WebSocket2.CONNECTING) return;
+        if (websocket.readyState !== WebSocket.CONNECTING) return;
         req = websocket._req = null;
         const upgrade = res.headers.upgrade;
         if (upgrade === void 0 || upgrade.toLowerCase() !== "websocket") {
@@ -3789,19 +3789,19 @@ var require_websocket = __commonJS({
             return;
           }
           const extensionNames = Object.keys(extensions);
-          if (extensionNames.length !== 1 || extensionNames[0] !== PerMessageDeflate2.extensionName) {
+          if (extensionNames.length !== 1 || extensionNames[0] !== PerMessageDeflate.extensionName) {
             const message = "Server indicated an extension that was not requested";
             abortHandshake(websocket, socket, message);
             return;
           }
           try {
-            perMessageDeflate.accept(extensions[PerMessageDeflate2.extensionName]);
+            perMessageDeflate.accept(extensions[PerMessageDeflate.extensionName]);
           } catch (err) {
             const message = "Invalid Sec-WebSocket-Extensions header";
             abortHandshake(websocket, socket, message);
             return;
           }
-          websocket._extensions[PerMessageDeflate2.extensionName] = perMessageDeflate;
+          websocket._extensions[PerMessageDeflate.extensionName] = perMessageDeflate;
         }
         websocket.setSocket(socket, head, {
           allowSynchronousEvents: opts.allowSynchronousEvents,
@@ -3819,7 +3819,7 @@ var require_websocket = __commonJS({
       }
     }
     function emitErrorAndClose(websocket, err) {
-      websocket._readyState = WebSocket2.CLOSING;
+      websocket._readyState = WebSocket.CLOSING;
       websocket._errorEmitted = true;
       websocket.emit("error", err);
       websocket.emitClose();
@@ -3836,7 +3836,7 @@ var require_websocket = __commonJS({
       return tls.connect(options);
     }
     function abortHandshake(websocket, stream, message) {
-      websocket._readyState = WebSocket2.CLOSING;
+      websocket._readyState = WebSocket.CLOSING;
       const err = new Error(message);
       Error.captureStackTrace(err, abortHandshake);
       if (stream.setHeader) {
@@ -3911,9 +3911,9 @@ var require_websocket = __commonJS({
     }
     function senderOnError(err) {
       const websocket = this[kWebSocket];
-      if (websocket.readyState === WebSocket2.CLOSED) return;
-      if (websocket.readyState === WebSocket2.OPEN) {
-        websocket._readyState = WebSocket2.CLOSING;
+      if (websocket.readyState === WebSocket.CLOSED) return;
+      if (websocket.readyState === WebSocket.OPEN) {
+        websocket._readyState = WebSocket.CLOSING;
         setCloseTimer(websocket);
       }
       this._socket.end();
@@ -3933,7 +3933,7 @@ var require_websocket = __commonJS({
       this.removeListener("close", socketOnClose);
       this.removeListener("data", socketOnData);
       this.removeListener("end", socketOnEnd);
-      websocket._readyState = WebSocket2.CLOSING;
+      websocket._readyState = WebSocket.CLOSING;
       if (!this._readableState.endEmitted && !websocket._closeFrameReceived && !websocket._receiver._writableState.errorEmitted && this._readableState.length !== 0) {
         const chunk = this.read(this._readableState.length);
         websocket._receiver.write(chunk);
@@ -3955,7 +3955,7 @@ var require_websocket = __commonJS({
     }
     function socketOnEnd() {
       const websocket = this[kWebSocket];
-      websocket._readyState = WebSocket2.CLOSING;
+      websocket._readyState = WebSocket.CLOSING;
       websocket._receiver.end();
       this.end();
     }
@@ -3964,7 +3964,7 @@ var require_websocket = __commonJS({
       this.removeListener("error", socketOnError);
       this.on("error", NOOP);
       if (websocket) {
-        websocket._readyState = WebSocket2.CLOSING;
+        websocket._readyState = WebSocket.CLOSING;
         this.destroy();
       }
     }
@@ -3975,7 +3975,7 @@ var require_websocket = __commonJS({
 var require_stream = __commonJS({
   "node_modules/ws/lib/stream.js"(exports2, module) {
     "use strict";
-    var WebSocket2 = require_websocket();
+    var WebSocket = require_websocket();
     var { Duplex } = __require("stream");
     function emitClose(stream) {
       stream.emit("close");
@@ -3992,7 +3992,7 @@ var require_stream = __commonJS({
         this.emit("error", err);
       }
     }
-    function createWebSocketStream2(ws, options) {
+    function createWebSocketStream(ws, options) {
       let terminateOnDestroy = true;
       const duplex = new Duplex({
         ...options,
@@ -4065,7 +4065,7 @@ var require_stream = __commonJS({
       duplex.on("error", duplexOnError);
       return duplex;
     }
-    module.exports = createWebSocketStream2;
+    module.exports = createWebSocketStream;
   }
 });
 
@@ -4122,16 +4122,16 @@ var require_websocket_server = __commonJS({
     var http = __require("http");
     var { Duplex } = __require("stream");
     var { createHash: createHash2 } = __require("crypto");
-    var extension2 = require_extension();
-    var PerMessageDeflate2 = require_permessage_deflate();
-    var subprotocol2 = require_subprotocol();
-    var WebSocket2 = require_websocket();
+    var extension = require_extension();
+    var PerMessageDeflate = require_permessage_deflate();
+    var subprotocol = require_subprotocol();
+    var WebSocket = require_websocket();
     var { CLOSE_TIMEOUT, GUID, kWebSocket } = require_constants();
     var keyRegex = /^[+/0-9A-Za-z]{22}==$/;
     var RUNNING = 0;
     var CLOSING = 1;
     var CLOSED = 2;
-    var WebSocketServer2 = class extends EventEmitter3 {
+    var WebSocketServer = class extends EventEmitter3 {
       /**
        * Create a `WebSocketServer` instance.
        *
@@ -4191,7 +4191,7 @@ var require_websocket_server = __commonJS({
           host: null,
           path: null,
           port: null,
-          WebSocket: WebSocket2,
+          WebSocket,
           ...options
         };
         if (options.port == null && !options.server && !options.noServer || options.port != null && (options.server || options.noServer) || options.server && options.noServer) {
@@ -4353,7 +4353,7 @@ var require_websocket_server = __commonJS({
         let protocols = /* @__PURE__ */ new Set();
         if (secWebSocketProtocol !== void 0) {
           try {
-            protocols = subprotocol2.parse(secWebSocketProtocol);
+            protocols = subprotocol.parse(secWebSocketProtocol);
           } catch (err) {
             const message = "Invalid Sec-WebSocket-Protocol header";
             abortHandshakeOrEmitwsClientError(this, req, socket, 400, message);
@@ -4363,16 +4363,16 @@ var require_websocket_server = __commonJS({
         const secWebSocketExtensions = req.headers["sec-websocket-extensions"];
         const extensions = {};
         if (this.options.perMessageDeflate && secWebSocketExtensions !== void 0) {
-          const perMessageDeflate = new PerMessageDeflate2({
+          const perMessageDeflate = new PerMessageDeflate({
             ...this.options.perMessageDeflate,
             isServer: true,
             maxPayload: this.options.maxPayload
           });
           try {
-            const offers = extension2.parse(secWebSocketExtensions);
-            if (offers[PerMessageDeflate2.extensionName]) {
-              perMessageDeflate.accept(offers[PerMessageDeflate2.extensionName]);
-              extensions[PerMessageDeflate2.extensionName] = perMessageDeflate;
+            const offers = extension.parse(secWebSocketExtensions);
+            if (offers[PerMessageDeflate.extensionName]) {
+              perMessageDeflate.accept(offers[PerMessageDeflate.extensionName]);
+              extensions[PerMessageDeflate.extensionName] = perMessageDeflate;
             }
           } catch (err) {
             const message = "Invalid or unacceptable Sec-WebSocket-Extensions header";
@@ -4443,10 +4443,10 @@ var require_websocket_server = __commonJS({
             ws._protocol = protocol;
           }
         }
-        if (extensions[PerMessageDeflate2.extensionName]) {
-          const params = extensions[PerMessageDeflate2.extensionName].params;
-          const value = extension2.format({
-            [PerMessageDeflate2.extensionName]: [params]
+        if (extensions[PerMessageDeflate.extensionName]) {
+          const params = extensions[PerMessageDeflate.extensionName].params;
+          const value = extension.format({
+            [PerMessageDeflate.extensionName]: [params]
           });
           headers.push(`Sec-WebSocket-Extensions: ${value}`);
           ws._extensions = extensions;
@@ -4473,7 +4473,7 @@ var require_websocket_server = __commonJS({
         cb(ws, req);
       }
     };
-    module.exports = WebSocketServer2;
+    module.exports = WebSocketServer;
     function addListeners(server, map2) {
       for (const event of Object.keys(map2)) server.on(event, map2[event]);
       return function removeListeners() {
@@ -4519,24 +4519,24 @@ var require_websocket_server = __commonJS({
 var require_ws = __commonJS({
   "node_modules/ws/index.js"(exports2, module) {
     "use strict";
-    var createWebSocketStream2 = require_stream();
-    var extension2 = require_extension();
-    var PerMessageDeflate2 = require_permessage_deflate();
-    var Receiver2 = require_receiver();
-    var Sender2 = require_sender();
-    var subprotocol2 = require_subprotocol();
-    var WebSocket2 = require_websocket();
-    var WebSocketServer2 = require_websocket_server();
-    WebSocket2.createWebSocketStream = createWebSocketStream2;
-    WebSocket2.extension = extension2;
-    WebSocket2.PerMessageDeflate = PerMessageDeflate2;
-    WebSocket2.Receiver = Receiver2;
-    WebSocket2.Sender = Sender2;
-    WebSocket2.Server = WebSocketServer2;
-    WebSocket2.subprotocol = subprotocol2;
-    WebSocket2.WebSocket = WebSocket2;
-    WebSocket2.WebSocketServer = WebSocketServer2;
-    module.exports = WebSocket2;
+    var createWebSocketStream = require_stream();
+    var extension = require_extension();
+    var PerMessageDeflate = require_permessage_deflate();
+    var Receiver = require_receiver();
+    var Sender = require_sender();
+    var subprotocol = require_subprotocol();
+    var WebSocket = require_websocket();
+    var WebSocketServer = require_websocket_server();
+    WebSocket.createWebSocketStream = createWebSocketStream;
+    WebSocket.extension = extension;
+    WebSocket.PerMessageDeflate = PerMessageDeflate;
+    WebSocket.Receiver = Receiver;
+    WebSocket.Sender = Sender;
+    WebSocket.Server = WebSocketServer;
+    WebSocket.subprotocol = subprotocol;
+    WebSocket.WebSocket = WebSocket;
+    WebSocket.WebSocketServer = WebSocketServer;
+    module.exports = WebSocket;
   }
 });
 
@@ -6898,15 +6898,18 @@ var Metrics = {
   update: 0
 };
 
-// node_modules/typebox/build/system/memory/assign.mjs
-function Assign(left, right) {
-  Metrics.assign += 1;
-  return { ...left, ...right };
-}
+// node_modules/typebox/build/system/settings/settings.mjs
+var settings_exports = {};
+__export(settings_exports, {
+  Get: () => Get,
+  Reset: () => Reset,
+  Set: () => Set2
+});
 
 // node_modules/typebox/build/guard/guard.mjs
 var guard_exports = {};
 __export(guard_exports, {
+  Counted: () => Counted,
   Entries: () => Entries,
   EntriesRegExp: () => EntriesRegExp,
   Every: () => Every,
@@ -6940,6 +6943,8 @@ __export(guard_exports, {
   IsValueLike: () => IsValueLike,
   Keys: () => Keys,
   ShiftLeft: () => ShiftLeft,
+  Some: () => Some,
+  SomeAll: () => SomeAll,
   Symbols: () => Symbols,
   Values: () => Values
 });
@@ -6981,7 +6986,7 @@ function NextGraphemeClusterIndex(value, clusterStart) {
   const startCP = value.codePointAt(clusterStart);
   let clusterEnd = clusterStart + CodePointLength(startCP);
   clusterEnd = ConsumeModifiers(value, clusterEnd);
-  while (clusterEnd < value.length - 1 && value[clusterEnd] === "\u200D") {
+  while (clusterEnd < value.length - 1 && IsZeroWidthJoiner(value.codePointAt(clusterEnd))) {
     const nextCP = value.codePointAt(clusterEnd + 1);
     clusterEnd += 1 + CodePointLength(nextCP);
     clusterEnd = ConsumeModifiers(value, clusterEnd);
@@ -7003,7 +7008,7 @@ function GraphemeCount(value) {
   }
   return count;
 }
-function IsMinLength(value, minLength) {
+function IsMinLengthSegmented(value, minLength) {
   if (minLength === 0)
     return true;
   let count = 0;
@@ -7016,7 +7021,7 @@ function IsMinLength(value, minLength) {
   }
   return false;
 }
-function IsMaxLength(value, maxLength) {
+function IsMaxLengthSegmented(value, maxLength) {
   let count = 0;
   let index = 0;
   while (index < value.length) {
@@ -7027,13 +7032,13 @@ function IsMaxLength(value, maxLength) {
   }
   return true;
 }
-function IsMinLengthFast(value, minLength) {
+function IsMinLength(value, minLength) {
   if (minLength === 0)
     return true;
   let index = 0;
   while (index < value.length) {
     if (IsGraphemeCodePoint(value.charCodeAt(index))) {
-      return IsMinLength(value, minLength);
+      return IsMinLengthSegmented(value, minLength);
     }
     index++;
     if (index >= minLength)
@@ -7041,11 +7046,11 @@ function IsMinLengthFast(value, minLength) {
   }
   return false;
 }
-function IsMaxLengthFast(value, maxLength) {
+function IsMaxLength(value, maxLength) {
   let index = 0;
   while (index < value.length) {
     if (IsGraphemeCodePoint(value.charCodeAt(index))) {
-      return IsMaxLength(value, maxLength);
+      return IsMaxLengthSegmented(value, maxLength);
     }
     index++;
     if (index > maxLength)
@@ -7143,10 +7148,10 @@ function GraphemeCount2(value) {
   return GraphemeCount(value);
 }
 function IsMaxLength2(value, length) {
-  return IsMaxLengthFast(value, length);
+  return IsMaxLength(value, length);
 }
 function IsMinLength2(value, length) {
-  return IsMinLengthFast(value, length);
+  return IsMinLength(value, length);
 }
 function Every(value, offset, callback) {
   for (let index = offset; index < value.length; index++) {
@@ -7162,6 +7167,24 @@ function EveryAll(value, offset, callback) {
       result = false;
   }
   return result;
+}
+function Some(value, callback) {
+  for (let index = 0; index < value.length; index++) {
+    if (callback(value[index], index))
+      return true;
+  }
+  return false;
+}
+function SomeAll(value, callback) {
+  let result = false;
+  for (let index = 0; index < value.length; index++) {
+    if (callback(value[index], index))
+      result = true;
+  }
+  return result;
+}
+function Counted(value, callback) {
+  return value.reduce((result, value2, index) => callback(value2, index) ? ++result : result, 0);
 }
 function ShiftLeft(array2, true_, false_) {
   return IsEqual(array2.length, 0) ? false_() : true_(array2[0], array2.slice(1));
@@ -7281,22 +7304,68 @@ function IsMap(value) {
   return value instanceof globalThis.Map;
 }
 
+// node_modules/typebox/build/system/settings/settings.mjs
+var settings = {
+  immutableTypes: false,
+  maxErrors: 8,
+  maxInstantiationCount: 128,
+  useAcceleration: true,
+  exactOptionalPropertyTypes: false,
+  enumerableKind: false,
+  correctiveParse: false,
+  unionPrioritySort: true
+};
+function Reset() {
+  settings.immutableTypes = false;
+  settings.maxErrors = 8;
+  settings.maxInstantiationCount = 128;
+  settings.useAcceleration = true;
+  settings.exactOptionalPropertyTypes = false;
+  settings.enumerableKind = false;
+  settings.correctiveParse = false;
+  settings.unionPrioritySort = true;
+}
+function Set2(options) {
+  for (const key of guard_exports.Keys(options)) {
+    const value = options[key];
+    if (value !== void 0) {
+      Object.defineProperty(settings, key, { value });
+    }
+  }
+}
+function Get() {
+  return settings;
+}
+
+// node_modules/typebox/build/system/memory/freeze.mjs
+function Freeze(value) {
+  return settings_exports.Get().immutableTypes ? Object.freeze(value) : value;
+}
+
+// node_modules/typebox/build/system/memory/assign.mjs
+function Assign(left, right) {
+  Metrics.assign += 1;
+  return Freeze({ ...left, ...right });
+}
+
 // node_modules/typebox/build/system/memory/clone.mjs
 function FromClassInstance(value) {
   return value;
 }
-function IsTypeObject(value) {
+function IsSchemaObject(value) {
   return guard_exports.HasPropertyKey(value, "~kind") || guard_exports.HasPropertyKey(value, "~unsafe");
 }
-function FromTypeObject(value) {
+function FromSchemaObject(value) {
   const result = {};
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  for (const key of Object.keys(descriptors)) {
+  for (const key of guard_exports.Keys(value)) {
     if (guard_exports.IsUnsafePropertyKey(key))
       continue;
-    const descriptor = descriptors[key];
-    if (guard_exports.HasPropertyKey(descriptor, "value")) {
-      Object.defineProperty(result, key, { ...descriptor, value: FromValue(descriptor.value) });
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    descriptor.value = FromValue(descriptor.value);
+    if (guard_exports.IsEqual(descriptor.enumerable, true)) {
+      result[key] = descriptor.value;
+    } else {
+      Object.defineProperty(result, key, descriptor);
     }
   }
   return result;
@@ -7314,7 +7383,7 @@ function FromPlainObject(value) {
   return result;
 }
 function FromObject(value) {
-  return guard_exports.IsClassInstance(value) ? FromClassInstance(value) : IsTypeObject(value) ? FromTypeObject(value) : FromPlainObject(value);
+  return guard_exports.IsClassInstance(value) ? FromClassInstance(value) : IsSchemaObject(value) ? FromSchemaObject(value) : FromPlainObject(value);
 }
 function FromArray(value) {
   return value.map((element) => FromValue(element));
@@ -7339,43 +7408,6 @@ function Clone(value) {
   return FromValue(value);
 }
 
-// node_modules/typebox/build/system/settings/settings.mjs
-var settings_exports = {};
-__export(settings_exports, {
-  Get: () => Get,
-  Reset: () => Reset,
-  Set: () => Set2
-});
-var settings = {
-  immutableTypes: false,
-  maxErrors: 8,
-  useAcceleration: true,
-  exactOptionalPropertyTypes: false,
-  enumerableKind: false,
-  correctiveParse: false,
-  unionPrioritySort: true
-};
-function Reset() {
-  settings.immutableTypes = false;
-  settings.maxErrors = 8;
-  settings.useAcceleration = true;
-  settings.exactOptionalPropertyTypes = false;
-  settings.enumerableKind = false;
-  settings.correctiveParse = false;
-  settings.unionPrioritySort = true;
-}
-function Set2(options) {
-  for (const key of guard_exports.Keys(options)) {
-    const value = options[key];
-    if (value !== void 0) {
-      Object.defineProperty(settings, key, { value });
-    }
-  }
-}
-function Get() {
-  return settings;
-}
-
 // node_modules/typebox/build/system/memory/create.mjs
 function MergeHidden(left, right) {
   for (const key of Object.keys(right)) {
@@ -7393,24 +7425,23 @@ function Merge(left, right) {
 }
 function Create(hidden, enumerable, options = {}) {
   Metrics.create += 1;
-  const settings2 = settings_exports.Get();
   const withOptions = Merge(enumerable, options);
-  const withHidden = settings2.enumerableKind ? Merge(withOptions, hidden) : MergeHidden(withOptions, hidden);
-  return settings2.immutableTypes ? Object.freeze(withHidden) : withHidden;
+  const withHidden = settings_exports.Get().enumerableKind ? Merge(withOptions, hidden) : MergeHidden(withOptions, hidden);
+  return Freeze(withHidden);
 }
 
 // node_modules/typebox/build/system/memory/discard.mjs
 function Discard(value, propertyKeys) {
   Metrics.discard += 1;
   const result = {};
-  const descriptors = Object.getOwnPropertyDescriptors(Clone(value));
-  const keysToDiscard = new Set(propertyKeys);
-  for (const key of Object.keys(descriptors)) {
-    if (keysToDiscard.has(key))
+  for (const key of guard_exports.Keys(value)) {
+    if (propertyKeys.includes(key))
       continue;
-    Object.defineProperty(result, key, descriptors[key]);
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    descriptor.value = Clone(descriptor.value);
+    Object.defineProperty(result, key, descriptor);
   }
-  return result;
+  return Freeze(result);
 }
 
 // node_modules/typebox/build/system/memory/update.mjs
@@ -7434,7 +7465,7 @@ function Update(current, hidden, enumerable) {
       value: enumerable[key]
     });
   }
-  return result;
+  return Freeze(result);
 }
 
 // node_modules/typebox/build/type/types/schema.mjs
@@ -8078,6 +8109,9 @@ function TupleToObject(type) {
 }
 
 // node_modules/typebox/build/type/engine/evaluate/composite.mjs
+function CanComposite(type) {
+  return IsObject2(type) || IsTuple(type);
+}
 function IsReadonlyProperty(left, right) {
   return IsReadonly(left) ? IsReadonly(right) ? true : false : false;
 }
@@ -8095,49 +8129,52 @@ function CompositePropertyKey(left, right, key) {
   return key in left ? key in right ? CompositeProperty(left[key], right[key]) : left[key] : key in right ? right[key] : Never();
 }
 function CompositeProperties(left, right) {
-  const keys = /* @__PURE__ */ new Set([...guard_exports.Keys(right), ...guard_exports.Keys(left)]);
-  return [...keys].reduce((result, key) => {
-    return { ...result, [key]: CompositePropertyKey(left, right, key) };
+  const keys = /* @__PURE__ */ new Set([...guard_exports.Keys(left), ...guard_exports.Keys(right)]);
+  const result = [...keys].reduce((result2, key) => {
+    return { ...result2, [key]: CompositePropertyKey(left, right, key) };
   }, {});
+  return result;
 }
 function GetProperties(type) {
-  const result = IsObject2(type) ? type.properties : IsTuple(type) ? TupleElementsToProperties(type.items) : Unreachable();
+  const result = IsObject2(type) ? type.properties : IsTuple(type) ? TupleElementsToProperties(type.items) : {};
   return result;
 }
 function Composite(left, right) {
   const leftProperties = GetProperties(left);
   const rightProperties = GetProperties(right);
   const properties = CompositeProperties(leftProperties, rightProperties);
-  return _Object_(properties);
+  const result = _Object_(properties);
+  return result;
 }
 
 // node_modules/typebox/build/type/engine/evaluate/narrow.mjs
-function Narrow(left, right) {
+function NarrowCompareRule(left, right) {
   const result = Compare(left, right);
-  return guard_exports.IsEqual(result, ResultLeftInside) ? left : guard_exports.IsEqual(result, ResultRightInside) ? right : guard_exports.IsEqual(result, ResultEqual) ? right : Never();
+  return guard_exports.IsEqual(result, CompareResultLeftInside) ? left : guard_exports.IsEqual(result, CompareResultRightInside) ? right : guard_exports.IsEqual(result, CompareResultEqual) ? right : Never();
+}
+function NarrowCompositeRule(left, right) {
+  const canCompositeLeft = CanComposite(left);
+  const canCompositeRight = CanComposite(right);
+  return canCompositeLeft && canCompositeRight ? Composite(left, right) : canCompositeLeft && !canCompositeRight ? left : !canCompositeLeft && canCompositeRight ? right : NarrowCompareRule(left, right);
+}
+function Narrow(left, right) {
+  return IsNever(left) ? left : IsAny(left) ? left : IsUnknown(left) ? right : IsNever(right) ? right : IsAny(right) ? right : IsUnknown(right) ? left : NarrowCompositeRule(left, right);
 }
 
 // node_modules/typebox/build/type/engine/evaluate/distribute.mjs
-function IsObjectLike(type) {
-  return IsObject2(type) || IsTuple(type);
-}
-function IsUnionOperand(left, right) {
-  const isUnionLeft = IsUnion(left);
-  const isUnionRight = IsUnion(right);
-  const result = isUnionLeft || isUnionRight;
+function ShouldEvaluate(left, right) {
+  const result = IsUnion(left) || IsUnion(right);
   return result;
 }
 function DistributeOperation(left, right) {
   const evaluatedLeft = EvaluateType(left);
   const evaluatedRight = EvaluateType(right);
-  const isUnionOperand = IsUnionOperand(evaluatedLeft, evaluatedRight);
-  const isObjectLeft = IsObjectLike(evaluatedLeft);
-  const IsObjectRight = IsObjectLike(evaluatedRight);
-  const result = isUnionOperand ? EvaluateIntersect([evaluatedLeft, evaluatedRight]) : isObjectLeft && IsObjectRight ? Composite(evaluatedLeft, evaluatedRight) : isObjectLeft && !IsObjectRight ? evaluatedLeft : !isObjectLeft && IsObjectRight ? evaluatedRight : Narrow(evaluatedLeft, evaluatedRight);
+  const shouldEvaluate = ShouldEvaluate(evaluatedLeft, evaluatedRight);
+  const result = shouldEvaluate ? EvaluateIntersect([evaluatedLeft, evaluatedRight]) : Narrow(evaluatedLeft, evaluatedRight);
   return result;
 }
 function DistributeType(type, types, result = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => DistributeType(type, right, [...result, DistributeOperation(type, left)]), () => guard_exports.IsEqual(result.length, 0) ? [type] : result);
+  return guard_exports.ShiftLeft(types, (left, right) => DistributeType(type, right, [...result, DistributeOperation(left, type)]), () => guard_exports.IsEqual(result.length, 0) ? [type] : result);
 }
 function DistributeUnion(types, distribution, result = []) {
   return guard_exports.ShiftLeft(types, (left, right) => DistributeUnion(right, distribution, [...result, ...Distribute([left], distribution)]), () => result);
@@ -8152,10 +8189,8 @@ function ExcludeType(left, right) {
   const result = result_exports.IsExtendsTrueLike(check2) ? [] : [left];
   return result;
 }
-function ExcludeUnion(types, right) {
-  return types.reduce((result, head) => {
-    return [...result, ...ExcludeType(head, right)];
-  }, []);
+function ExcludeUnion(left, right, result = []) {
+  return guard_exports.ShiftLeft(left, (head, tail) => ExcludeUnion(tail, right, [...result, ...ExcludeType(head, right)]), () => result);
 }
 function ExcludeOperation(left, right) {
   const evaluated = EvaluateType(left);
@@ -8167,19 +8202,18 @@ function ExcludeOperation(left, right) {
 
 // node_modules/typebox/build/type/engine/evaluate/evaluate.mjs
 function EvaluateDependent(if_, then_, else_) {
-  const intersect = Intersect([if_, then_]);
+  const intersected = EvaluateIntersect([if_, then_]);
   const excluded = ExcludeOperation(else_, if_);
-  const result = EvaluateUnion([intersect, excluded]);
+  const result = EvaluateUnion([intersected, excluded]);
   return result;
 }
-function EvaluateEnum(values) {
-  const result = values.map((value) => Literal(value));
-  return EvaluateUnion(result);
+function EvaluateEnum(values, result = []) {
+  return guard_exports.ShiftLeft(values, (left, right) => EvaluateEnum(right, [...result, Literal(left)]), () => EvaluateUnion(result));
 }
 function EvaluateIntersect(types) {
   const distribution = Distribute(types);
   const broadend = Broaden(distribution);
-  const result = EvaluateUnionFast(broadend);
+  const result = EvaluateUnion(broadend);
   return result;
 }
 function EvaluateTemplateLiteral(pattern) {
@@ -8193,7 +8227,8 @@ function EvaluateUnion(types) {
   return result;
 }
 function EvaluateType(type) {
-  return IsDependent(type) ? EvaluateDependent(type.if, type.then, type.else) : IsEnum(type) ? EvaluateEnum(type.enum) : IsIntersect(type) ? EvaluateIntersect(type.allOf) : IsTemplateLiteral(type) ? EvaluateTemplateLiteral(type.pattern) : IsUnion(type) ? EvaluateUnion(type.anyOf) : type;
+  const result = IsDependent(type) ? EvaluateDependent(type.if, type.then, type.else) : IsEnum(type) ? EvaluateEnum(type.enum) : IsIntersect(type) ? EvaluateIntersect(type.allOf) : IsTemplateLiteral(type) ? EvaluateTemplateLiteral(type.pattern) : IsUnion(type) ? EvaluateUnion(type.anyOf) : type;
+  return result;
 }
 function EvaluateUnionFast(types) {
   const result = guard_exports.IsEqual(types.length, 1) ? types[0] : guard_exports.IsEqual(types.length, 0) ? Never() : Union(types);
@@ -8249,10 +8284,8 @@ function FlattenType(type) {
   const result = IsUnion(type) ? Flatten(type.anyOf) : [type];
   return result;
 }
-function Flatten(types) {
-  return types.reduce((result, type) => {
-    return [...result, ...FlattenType(type)];
-  }, []);
+function Flatten(types, result = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => Flatten(right, [...result, ...FlattenType(left)]), () => result);
 }
 
 // node_modules/typebox/build/type/engine/record/from_key_union.mjs
@@ -8366,15 +8399,12 @@ function IntrinsicOrCall(ref, parameters) {
 function Unreachable2() {
   throw Error("Unreachable");
 }
-var DelimitedDecode = (input, result = []) => {
-  return input.reduce((result2, left) => {
-    return guard_exports.IsArray(left) && guard_exports.IsEqual(left.length, 2) ? [...result2, left[0]] : [...result2, left];
-  }, []);
-};
-var Delimited = (input) => {
-  const [left, right] = input;
-  return DelimitedDecode([...left, ...right]);
-};
+function DelimitedDecode(input, result = []) {
+  return guard_exports.ShiftLeft(input, (left, right) => DelimitedDecode(right, [...result, left[1]]), () => result);
+}
+function Delimited(input) {
+  return guard_exports.IsEqual(input.length, 3) ? [input[0], ...DelimitedDecode(input[1])] : [];
+}
 function GenericParameterExtendsEqualsMapping(input) {
   return Parameter(input[0], input[2], input[4]);
 }
@@ -8605,17 +8635,11 @@ function _Object_Mapping(input) {
 function ElementNamedMapping(input) {
   return guard_exports.IsEqual(input.length, 5) ? AddReadonlyDeferred(AddOptionalDeferred(input[4])) : guard_exports.IsEqual(input.length, 3) ? input[2] : guard_exports.IsEqual(input.length, 4) ? guard_exports.IsEqual(input[2], "readonly") ? AddReadonlyDeferred(input[3]) : AddOptionalDeferred(input[3]) : Unreachable2();
 }
-function ElementReadonlyOptionalMapping(input) {
-  return AddReadonlyDeferred(AddOptionalDeferred(input[1]));
-}
-function ElementReadonlyMapping(input) {
-  return AddReadonlyDeferred(input[1]);
-}
-function ElementOptionalMapping(input) {
-  return AddOptionalDeferred(input[0]);
-}
 function ElementBaseMapping(input) {
-  return input;
+  if (!guard_exports.IsArray(input) || !guard_exports.IsEqual(input.length, 3))
+    return input;
+  const [isReadonly, type, isOptional] = input;
+  return isReadonly && isOptional ? AddReadonlyDeferred(AddOptionalDeferred(type)) : isReadonly && !isOptional ? AddReadonlyDeferred(type) : !isReadonly && isOptional ? AddOptionalDeferred(type) : type;
 }
 function ElementMapping(input) {
   return guard_exports.IsEqual(input.length, 2) ? Rest(input[1]) : guard_exports.IsEqual(input.length, 1) ? input[0] : Unreachable2();
@@ -8783,15 +8807,14 @@ function ModuleDeclarationDelimiterMapping(input) {
   return input;
 }
 function ModuleDeclarationListMapping(input) {
-  return PropertiesReduce(Delimited(input));
+  return Delimited(input);
 }
 function ModuleDeclarationMapping(input) {
   return input[1];
 }
 function ModuleMapping(input) {
-  const moduleDeclaration = input[0];
-  const moduleDeclarationList = input[1];
-  return ModuleDeferred(memory_exports.Assign(moduleDeclaration, moduleDeclarationList[0]));
+  const [moduleDeclaration, moduleDeclarationList] = [input[0], input[1]];
+  return ModuleDeferred(memory_exports.Assign(moduleDeclaration, PropertiesReduce(moduleDeclarationList)[0]));
 }
 function ScriptMapping(input) {
   return input;
@@ -9080,11 +9103,11 @@ var GenericParameterExtends = (input) => If(If(Ident(input), ([_0, input2]) => I
 var GenericParameterEquals = (input) => If(If(Ident(input), ([_0, input2]) => If(Const("=", input2), ([_1, input3]) => If(Type(input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [GenericParameterEqualsMapping(_0), input2]);
 var GenericParameterIdentifier = (input) => If(Ident(input), ([_0, input2]) => [GenericParameterIdentifierMapping(_0), input2]);
 var GenericParameter = (input) => If(If(GenericParameterExtendsEquals(input), ([_0, input2]) => [_0, input2], () => If(GenericParameterExtends(input), ([_0, input2]) => [_0, input2], () => If(GenericParameterEquals(input), ([_0, input2]) => [_0, input2], () => If(GenericParameterIdentifier(input), ([_0, input2]) => [_0, input2], () => [])))), ([_0, input2]) => [GenericParameterMapping(_0), input2]);
-var GenericParameterList_0 = (input, result = []) => If(If(GenericParameter(input), ([_0, input2]) => If(Const(",", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => GenericParameterList_0(input2, [...result, _0]), () => [result, input]);
-var GenericParameterList = (input) => If(If(GenericParameterList_0(input), ([_0, input2]) => If(If(If(GenericParameter(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [GenericParameterListMapping(_0), input2]);
+var GenericParameterList_0 = (input, result = []) => If(If(Const(",", input), ([_0, input2]) => If(GenericParameter(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => GenericParameterList_0(input2, [...result, _0]), () => [result, input]);
+var GenericParameterList = (input) => If(If(If(GenericParameter(input), ([_0, input2]) => If(GenericParameterList_0(input2), ([_1, input3]) => If(If(Const(",", input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [GenericParameterListMapping(_0), input2]);
 var GenericParameters = (input) => If(If(Const("<", input), ([_0, input2]) => If(GenericParameterList(input2), ([_1, input3]) => If(Const(">", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [GenericParametersMapping(_0), input2]);
-var GenericCallArgumentList_0 = (input, result = []) => If(If(Type(input), ([_0, input2]) => If(Const(",", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => GenericCallArgumentList_0(input2, [...result, _0]), () => [result, input]);
-var GenericCallArgumentList = (input) => If(If(GenericCallArgumentList_0(input), ([_0, input2]) => If(If(If(Type(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [GenericCallArgumentListMapping(_0), input2]);
+var GenericCallArgumentList_0 = (input, result = []) => If(If(Const(",", input), ([_0, input2]) => If(Type(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => GenericCallArgumentList_0(input2, [...result, _0]), () => [result, input]);
+var GenericCallArgumentList = (input) => If(If(If(Type(input), ([_0, input2]) => If(GenericCallArgumentList_0(input2), ([_1, input3]) => If(If(Const(",", input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [GenericCallArgumentListMapping(_0), input2]);
 var GenericCallArguments = (input) => If(If(Const("<", input), ([_0, input2]) => If(GenericCallArgumentList(input2), ([_1, input3]) => If(Const(">", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [GenericCallArgumentsMapping(_0), input2]);
 var GenericCall = (input) => If(If(Ident(input), ([_0, input2]) => If(GenericCallArguments(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [GenericCallMapping(_0), input2]);
 var OptionalSemiColon = (input) => If(If(If(Const(";", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [OptionalSemiColonMapping(_0), input2]);
@@ -9137,18 +9160,15 @@ var Readonly2 = (input) => If(If(If(Const("readonly", input), ([_0, input2]) => 
 var Optional3 = (input) => If(If(If(Const("?", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [OptionalMapping(_0), input2]);
 var Property = (input) => If(If(Readonly2(input), ([_0, input2]) => If(PropertyKey(input2), ([_1, input3]) => If(Optional3(input3), ([_2, input4]) => If(Const(":", input4), ([_3, input5]) => If(Type(input5), ([_4, input6]) => [[_0, _1, _2, _3, _4], input6]))))), ([_0, input2]) => [PropertyMapping(_0), input2]);
 var PropertyDelimiter = (input) => If(If(If(Const(",", input), ([_0, input2]) => If(Const("\n", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(Const(";", input), ([_0, input2]) => If(Const("\n", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(Const(",", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If(If(Const(";", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If(If(Const("\n", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => []))))), ([_0, input2]) => [PropertyDelimiterMapping(_0), input2]);
-var PropertyList_0 = (input, result = []) => If(If(Property(input), ([_0, input2]) => If(PropertyDelimiter(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => PropertyList_0(input2, [...result, _0]), () => [result, input]);
-var PropertyList = (input) => If(If(PropertyList_0(input), ([_0, input2]) => If(If(If(Property(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [PropertyListMapping(_0), input2]);
+var PropertyList_0 = (input, result = []) => If(If(PropertyDelimiter(input), ([_0, input2]) => If(Property(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => PropertyList_0(input2, [...result, _0]), () => [result, input]);
+var PropertyList = (input) => If(If(If(Property(input), ([_0, input2]) => If(PropertyList_0(input2), ([_1, input3]) => If(If(PropertyDelimiter(input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [PropertyListMapping(_0), input2]);
 var Properties = (input) => If(If(Const("{", input), ([_0, input2]) => If(PropertyList(input2), ([_1, input3]) => If(Const("}", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [PropertiesMapping(_0), input2]);
 var _Object_2 = (input) => If(Properties(input), ([_0, input2]) => [_Object_Mapping(_0), input2]);
 var ElementNamed = (input) => If(If(If(Ident(input), ([_0, input2]) => If(Const("?", input2), ([_1, input3]) => If(Const(":", input3), ([_2, input4]) => If(Const("readonly", input4), ([_3, input5]) => If(Type(input5), ([_4, input6]) => [[_0, _1, _2, _3, _4], input6]))))), ([_0, input2]) => [_0, input2], () => If(If(Ident(input), ([_0, input2]) => If(Const(":", input2), ([_1, input3]) => If(Const("readonly", input3), ([_2, input4]) => If(Type(input4), ([_3, input5]) => [[_0, _1, _2, _3], input5])))), ([_0, input2]) => [_0, input2], () => If(If(Ident(input), ([_0, input2]) => If(Const("?", input2), ([_1, input3]) => If(Const(":", input3), ([_2, input4]) => If(Type(input4), ([_3, input5]) => [[_0, _1, _2, _3], input5])))), ([_0, input2]) => [_0, input2], () => If(If(Ident(input), ([_0, input2]) => If(Const(":", input2), ([_1, input3]) => If(Type(input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => [])))), ([_0, input2]) => [ElementNamedMapping(_0), input2]);
-var ElementReadonlyOptional = (input) => If(If(Const("readonly", input), ([_0, input2]) => If(Type(input2), ([_1, input3]) => If(Const("?", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [ElementReadonlyOptionalMapping(_0), input2]);
-var ElementReadonly = (input) => If(If(Const("readonly", input), ([_0, input2]) => If(Type(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [ElementReadonlyMapping(_0), input2]);
-var ElementOptional = (input) => If(If(Type(input), ([_0, input2]) => If(Const("?", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [ElementOptionalMapping(_0), input2]);
-var ElementBase = (input) => If(If(ElementNamed(input), ([_0, input2]) => [_0, input2], () => If(ElementReadonlyOptional(input), ([_0, input2]) => [_0, input2], () => If(ElementReadonly(input), ([_0, input2]) => [_0, input2], () => If(ElementOptional(input), ([_0, input2]) => [_0, input2], () => If(Type(input), ([_0, input2]) => [_0, input2], () => []))))), ([_0, input2]) => [ElementBaseMapping(_0), input2]);
+var ElementBase = (input) => If(If(ElementNamed(input), ([_0, input2]) => [_0, input2], () => If(If(Readonly2(input), ([_0, input2]) => If(Type(input2), ([_1, input3]) => If(Optional3(input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ElementBaseMapping(_0), input2]);
 var Element = (input) => If(If(If(Const("...", input), ([_0, input2]) => If(ElementBase(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(ElementBase(input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ElementMapping(_0), input2]);
-var ElementList_0 = (input, result = []) => If(If(Element(input), ([_0, input2]) => If(Const(",", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => ElementList_0(input2, [...result, _0]), () => [result, input]);
-var ElementList = (input) => If(If(ElementList_0(input), ([_0, input2]) => If(If(If(Element(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [ElementListMapping(_0), input2]);
+var ElementList_0 = (input, result = []) => If(If(Const(",", input), ([_0, input2]) => If(Element(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => ElementList_0(input2, [...result, _0]), () => [result, input]);
+var ElementList = (input) => If(If(If(Element(input), ([_0, input2]) => If(ElementList_0(input2), ([_1, input3]) => If(If(Const(",", input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ElementListMapping(_0), input2]);
 var _Tuple_ = (input) => If(If(Const("[", input), ([_0, input2]) => If(ElementList(input2), ([_1, input3]) => If(Const("]", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_Tuple_Mapping(_0), input2]);
 var ParameterReadonlyOptional = (input) => If(If(Ident(input), ([_0, input2]) => If(Const("?", input2), ([_1, input3]) => If(Const(":", input3), ([_2, input4]) => If(Const("readonly", input4), ([_3, input5]) => If(Type(input5), ([_4, input6]) => [[_0, _1, _2, _3, _4], input6]))))), ([_0, input2]) => [ParameterReadonlyOptionalMapping(_0), input2]);
 var ParameterReadonly = (input) => If(If(Ident(input), ([_0, input2]) => If(Const(":", input2), ([_1, input3]) => If(Const("readonly", input3), ([_2, input4]) => If(Type(input4), ([_3, input5]) => [[_0, _1, _2, _3], input5])))), ([_0, input2]) => [ParameterReadonlyMapping(_0), input2]);
@@ -9156,8 +9176,8 @@ var ParameterOptional = (input) => If(If(Ident(input), ([_0, input2]) => If(Cons
 var ParameterType = (input) => If(If(Ident(input), ([_0, input2]) => If(Const(":", input2), ([_1, input3]) => If(Type(input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [ParameterTypeMapping(_0), input2]);
 var ParameterBase = (input) => If(If(ParameterReadonlyOptional(input), ([_0, input2]) => [_0, input2], () => If(ParameterReadonly(input), ([_0, input2]) => [_0, input2], () => If(ParameterOptional(input), ([_0, input2]) => [_0, input2], () => If(ParameterType(input), ([_0, input2]) => [_0, input2], () => [])))), ([_0, input2]) => [ParameterBaseMapping(_0), input2]);
 var Parameter2 = (input) => If(If(If(Const("...", input), ([_0, input2]) => If(ParameterBase(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(ParameterBase(input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ParameterMapping(_0), input2]);
-var ParameterList_0 = (input, result = []) => If(If(Parameter2(input), ([_0, input2]) => If(Const(",", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => ParameterList_0(input2, [...result, _0]), () => [result, input]);
-var ParameterList = (input) => If(If(ParameterList_0(input), ([_0, input2]) => If(If(If(Parameter2(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [ParameterListMapping(_0), input2]);
+var ParameterList_0 = (input, result = []) => If(If(Const(",", input), ([_0, input2]) => If(Parameter2(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => ParameterList_0(input2, [...result, _0]), () => [result, input]);
+var ParameterList = (input) => If(If(If(Parameter2(input), ([_0, input2]) => If(ParameterList_0(input2), ([_1, input3]) => If(If(Const(",", input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ParameterListMapping(_0), input2]);
 var _Function_2 = (input) => If(If(Const("(", input), ([_0, input2]) => If(ParameterList(input2), ([_1, input3]) => If(Const(")", input3), ([_2, input4]) => If(Const("=>", input4), ([_3, input5]) => If(Type(input5), ([_4, input6]) => [[_0, _1, _2, _3, _4], input6]))))), ([_0, input2]) => [_Function_Mapping(_0), input2]);
 var _Constructor_ = (input) => If(If(Const("new", input), ([_0, input2]) => If(Const("(", input2), ([_1, input3]) => If(ParameterList(input3), ([_2, input4]) => If(Const(")", input4), ([_3, input5]) => If(Const("=>", input5), ([_4, input6]) => If(Type(input6), ([_5, input7]) => [[_0, _1, _2, _3, _4, _5], input7])))))), ([_0, input2]) => [_Constructor_Mapping(_0), input2]);
 var MappedReadonly = (input) => If(If(If(Const("+", input), ([_0, input2]) => If(Const("readonly", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(Const("-", input), ([_0, input2]) => If(Const("readonly", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(Const("readonly", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])))), ([_0, input2]) => [MappedReadonlyMapping(_0), input2]);
@@ -9172,11 +9192,11 @@ var WithString = (input) => If(String3(['"', "'"], input), ([_0, input2]) => [Wi
 var WithNull = (input) => If(Const("null", input), ([_0, input2]) => [WithNullMapping(_0), input2]);
 var WithUndefined = (input) => If(Const("undefined", input), ([_0, input2]) => [WithUndefinedMapping(_0), input2]);
 var WithProperty = (input) => If(If(PropertyKey(input), ([_0, input2]) => If(Const(":", input2), ([_1, input3]) => If(WithValue(input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [WithPropertyMapping(_0), input2]);
-var WithPropertyList_0 = (input, result = []) => If(If(WithProperty(input), ([_0, input2]) => If(PropertyDelimiter(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => WithPropertyList_0(input2, [...result, _0]), () => [result, input]);
-var WithPropertyList = (input) => If(If(WithPropertyList_0(input), ([_0, input2]) => If(If(If(WithProperty(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [WithPropertyListMapping(_0), input2]);
+var WithPropertyList_0 = (input, result = []) => If(If(PropertyDelimiter(input), ([_0, input2]) => If(WithProperty(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => WithPropertyList_0(input2, [...result, _0]), () => [result, input]);
+var WithPropertyList = (input) => If(If(If(WithProperty(input), ([_0, input2]) => If(WithPropertyList_0(input2), ([_1, input3]) => If(If(PropertyDelimiter(input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [WithPropertyListMapping(_0), input2]);
 var WithObject = (input) => If(If(Const("{", input), ([_0, input2]) => If(WithPropertyList(input2), ([_1, input3]) => If(Const("}", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [WithObjectMapping(_0), input2]);
-var WithElementList_0 = (input, result = []) => If(If(WithValue(input), ([_0, input2]) => If(Const(",", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => WithElementList_0(input2, [...result, _0]), () => [result, input]);
-var WithElementList = (input) => If(If(WithElementList_0(input), ([_0, input2]) => If(If(If(WithValue(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [WithElementListMapping(_0), input2]);
+var WithElementList_0 = (input, result = []) => If(If(Const(",", input), ([_0, input2]) => If(WithValue(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => WithElementList_0(input2, [...result, _0]), () => [result, input]);
+var WithElementList = (input) => If(If(If(WithValue(input), ([_0, input2]) => If(WithElementList_0(input2), ([_1, input3]) => If(If(Const(",", input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [WithElementListMapping(_0), input2]);
 var WithArray = (input) => If(If(Const("[", input), ([_0, input2]) => If(WithElementList(input2), ([_1, input3]) => If(Const("]", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [WithArrayMapping(_0), input2]);
 var WithValue = (input) => If(If(WithBigInt(input), ([_0, input2]) => [_0, input2], () => If(WithNumber(input), ([_0, input2]) => [_0, input2], () => If(WithBoolean(input), ([_0, input2]) => [_0, input2], () => If(WithString(input), ([_0, input2]) => [_0, input2], () => If(WithNull(input), ([_0, input2]) => [_0, input2], () => If(WithUndefined(input), ([_0, input2]) => [_0, input2], () => If(WithObject(input), ([_0, input2]) => [_0, input2], () => If(WithArray(input), ([_0, input2]) => [_0, input2], () => [])))))))), ([_0, input2]) => [WithValueMapping(_0), input2]);
 var PatternBigInt = (input) => If(Const("-?(?:0|[1-9][0-9]*)n", input), ([_0, input2]) => [PatternBigIntMapping(_0), input2]);
@@ -9191,8 +9211,8 @@ var PatternUnion = (input) => If(If(If(PatternTerm(input), ([_0, input2]) => If(
 var PatternTerm = (input) => If(If(PatternBase(input), ([_0, input2]) => If(PatternBody(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [PatternTermMapping(_0), input2]);
 var PatternBody = (input) => If(If(PatternUnion(input), ([_0, input2]) => [_0, input2], () => If(PatternTerm(input), ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [PatternBodyMapping(_0), input2]);
 var Pattern = (input) => If(If(Const("^", input), ([_0, input2]) => If(PatternBody(input2), ([_1, input3]) => If(Const("$", input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [PatternMapping(_0), input2]);
-var InterfaceDeclarationHeritageList_0 = (input, result = []) => If(If(Type(input), ([_0, input2]) => If(Const(",", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => InterfaceDeclarationHeritageList_0(input2, [...result, _0]), () => [result, input]);
-var InterfaceDeclarationHeritageList = (input) => If(If(InterfaceDeclarationHeritageList_0(input), ([_0, input2]) => If(If(If(Type(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [InterfaceDeclarationHeritageListMapping(_0), input2]);
+var InterfaceDeclarationHeritageList_0 = (input, result = []) => If(If(Const(",", input), ([_0, input2]) => If(Type(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => InterfaceDeclarationHeritageList_0(input2, [...result, _0]), () => [result, input]);
+var InterfaceDeclarationHeritageList = (input) => If(If(If(Type(input), ([_0, input2]) => If(InterfaceDeclarationHeritageList_0(input2), ([_1, input3]) => If(If(Const(",", input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [InterfaceDeclarationHeritageListMapping(_0), input2]);
 var InterfaceDeclarationHeritage = (input) => If(If(If(Const("extends", input), ([_0, input2]) => If(InterfaceDeclarationHeritageList(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [InterfaceDeclarationHeritageMapping(_0), input2]);
 var InterfaceDeclarationGeneric = (input) => If(If(Const("interface", input), ([_0, input2]) => If(Ident(input2), ([_1, input3]) => If(GenericParameters(input3), ([_2, input4]) => If(InterfaceDeclarationHeritage(input4), ([_3, input5]) => If(Properties(input5), ([_4, input6]) => [[_0, _1, _2, _3, _4], input6]))))), ([_0, input2]) => [InterfaceDeclarationGenericMapping(_0), input2]);
 var InterfaceDeclaration = (input) => If(If(Const("interface", input), ([_0, input2]) => If(Ident(input2), ([_1, input3]) => If(InterfaceDeclarationHeritage(input3), ([_2, input4]) => If(Properties(input4), ([_3, input5]) => [[_0, _1, _2, _3], input5])))), ([_0, input2]) => [InterfaceDeclarationMapping(_0), input2]);
@@ -9200,8 +9220,8 @@ var TypeAliasDeclarationGeneric = (input) => If(If(Const("type", input), ([_0, i
 var TypeAliasDeclaration = (input) => If(If(Const("type", input), ([_0, input2]) => If(Ident(input2), ([_1, input3]) => If(Const("=", input3), ([_2, input4]) => If(Type(input4), ([_3, input5]) => [[_0, _1, _2, _3], input5])))), ([_0, input2]) => [TypeAliasDeclarationMapping(_0), input2]);
 var ExportKeyword = (input) => If(If(If(Const("export", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ExportKeywordMapping(_0), input2]);
 var ModuleDeclarationDelimiter = (input) => If(If(If(Const(";", input), ([_0, input2]) => If(Const("\n", input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [_0, input2], () => If(If(Const(";", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => If(If(Const("\n", input), ([_0, input2]) => [[_0], input2]), ([_0, input2]) => [_0, input2], () => []))), ([_0, input2]) => [ModuleDeclarationDelimiterMapping(_0), input2]);
-var ModuleDeclarationList_0 = (input, result = []) => If(If(ModuleDeclaration(input), ([_0, input2]) => If(ModuleDeclarationDelimiter(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => ModuleDeclarationList_0(input2, [...result, _0]), () => [result, input]);
-var ModuleDeclarationList = (input) => If(If(ModuleDeclarationList_0(input), ([_0, input2]) => If(If(If(ModuleDeclaration(input2), ([_02, input3]) => [[_02], input3]), ([_02, input3]) => [_02, input3], () => If([[], input2], ([_02, input3]) => [_02, input3], () => [])), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [ModuleDeclarationListMapping(_0), input2]);
+var ModuleDeclarationList_0 = (input, result = []) => If(If(ModuleDeclarationDelimiter(input), ([_0, input2]) => If(ModuleDeclaration(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => ModuleDeclarationList_0(input2, [...result, _0]), () => [result, input]);
+var ModuleDeclarationList = (input) => If(If(If(ModuleDeclaration(input), ([_0, input2]) => If(ModuleDeclarationList_0(input2), ([_1, input3]) => If(If(ModuleDeclarationDelimiter(input3), ([_02, input4]) => [[_02], input4], () => [[], input3]), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [_0, input2], () => If([[], input], ([_0, input2]) => [_0, input2], () => [])), ([_0, input2]) => [ModuleDeclarationListMapping(_0), input2]);
 var ModuleDeclaration = (input) => If(If(ExportKeyword(input), ([_0, input2]) => If(If(InterfaceDeclarationGeneric(input2), ([_02, input3]) => [_02, input3], () => If(InterfaceDeclaration(input2), ([_02, input3]) => [_02, input3], () => If(TypeAliasDeclarationGeneric(input2), ([_02, input3]) => [_02, input3], () => If(TypeAliasDeclaration(input2), ([_02, input3]) => [_02, input3], () => [])))), ([_1, input3]) => If(OptionalSemiColon(input3), ([_2, input4]) => [[_0, _1, _2], input4]))), ([_0, input2]) => [ModuleDeclarationMapping(_0), input2]);
 var Module = (input) => If(If(ModuleDeclaration(input), ([_0, input2]) => If(ModuleDeclarationList(input2), ([_1, input3]) => [[_0, _1], input3])), ([_0, input2]) => [ModuleMapping(_0), input2]);
 var Script = (input) => If(If(Module(input), ([_0, input2]) => [_0, input2], () => If(GenericType(input), ([_0, input2]) => [_0, input2], () => If(Type(input), ([_0, input2]) => [_0, input2], () => []))), ([_0, input2]) => [ScriptMapping(_0), input2]);
@@ -9803,45 +9823,40 @@ function Extends(inferred, left, right) {
 }
 
 // node_modules/typebox/build/type/engine/evaluate/compare.mjs
-var ResultEqual = "equal";
-var ResultDisjoint = "disjoint";
-var ResultLeftInside = "left-inside";
-var ResultRightInside = "right-inside";
+var CompareResultEqual = 0;
+var CompareResultDisjoint = 1;
+var CompareResultLeftInside = 2;
+var CompareResultRightInside = 3;
 function Compare(left, right) {
-  const extendsCheck = [
-    IsUnknown(left) ? result_exports.ExtendsFalse() : Extends({}, left, right),
-    IsUnknown(left) ? result_exports.ExtendsTrue({}) : Extends({}, right, left)
-  ];
-  return result_exports.IsExtendsTrueLike(extendsCheck[0]) && result_exports.IsExtendsTrueLike(extendsCheck[1]) ? ResultEqual : result_exports.IsExtendsTrueLike(extendsCheck[0]) && result_exports.IsExtendsFalse(extendsCheck[1]) ? ResultLeftInside : result_exports.IsExtendsFalse(extendsCheck[0]) && result_exports.IsExtendsTrueLike(extendsCheck[1]) ? ResultRightInside : ResultDisjoint;
+  const extendsCheck = [Extends({}, left, right), Extends({}, right, left)];
+  return result_exports.IsExtendsTrueLike(extendsCheck[0]) && result_exports.IsExtendsTrueLike(extendsCheck[1]) ? CompareResultEqual : result_exports.IsExtendsTrueLike(extendsCheck[0]) && result_exports.IsExtendsFalse(extendsCheck[1]) ? CompareResultLeftInside : result_exports.IsExtendsFalse(extendsCheck[0]) && result_exports.IsExtendsTrueLike(extendsCheck[1]) ? CompareResultRightInside : CompareResultDisjoint;
 }
 
 // node_modules/typebox/build/type/engine/evaluate/broaden.mjs
-function BroadFilter(type, types) {
-  return types.filter((left) => {
-    return Compare(type, left) === ResultRightInside ? false : true;
-  });
+function BroadenFilter(type, types, result = [], all = types) {
+  return guard_exports.ShiftLeft(types, (left, right) => {
+    const compare = Compare(type, left);
+    return guard_exports.IsEqual(compare, CompareResultLeftInside) || guard_exports.IsEqual(compare, CompareResultEqual) ? all : guard_exports.IsEqual(compare, CompareResultDisjoint) ? BroadenFilter(type, right, [...result, left], all) : BroadenFilter(type, right, result, all);
+  }, () => [...result, type]);
 }
-function IsBroadestType(type, types) {
-  const result = types.some((left) => {
-    const result2 = Compare(type, left);
-    return guard_exports.IsEqual(result2, ResultLeftInside) || guard_exports.IsEqual(result2, ResultEqual);
-  });
-  return guard_exports.IsEqual(result, false);
-}
-function BroadenType(type, types) {
+function BroadenType(type, types, result) {
   const evaluated = EvaluateType(type);
-  return IsAny(evaluated) ? [evaluated] : IsBroadestType(evaluated, types) ? [...BroadFilter(evaluated, types), evaluated] : types;
-}
-function BroadenTypes(types) {
-  return types.reduce((result, left) => {
-    return IsObject2(left) ? [...result, left] : (
-      // push
-      IsNever(left) ? result : (
-        // ignore
-        BroadenType(left, result)
+  return IsAny(evaluated) ? [evaluated] : (
+    // terminate (always the most broad)
+    IsUnknown(evaluated) ? [evaluated] : (
+      // terminate (always the most broad)
+      IsNever(evaluated) ? BroadenTypes(types, result) : (
+        // ignored: never is dropped
+        IsObject2(evaluated) ? BroadenTypes(types, [...result, evaluated]) : (
+          // objects are always considered (too expensive to compare)
+          BroadenTypes(types, BroadenFilter(evaluated, result))
+        )
       )
-    );
-  }, []);
+    )
+  );
+}
+function BroadenTypes(types, result = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => BroadenType(left, right, result), () => result);
 }
 function Broaden(types) {
   const broadened = BroadenTypes(types);
@@ -9872,8 +9887,12 @@ function BuildDistributionArray(parameters, names) {
 function ZipDistributionArray(arguments_, distributionArray, result = []) {
   return guard_exports.ShiftLeft(arguments_, (argumentLeft, argumentRight) => guard_exports.ShiftLeft(distributionArray, (booleanLeft, booleanRight) => ZipDistributionArray(argumentRight, booleanRight, [...result, [booleanLeft, argumentLeft]]), () => result), () => result);
 }
+function CanonicalArgument(type) {
+  return IsTemplateLiteral(type) ? EvaluateTemplateLiteral(type.pattern) : IsEnum(type) ? EvaluateEnum(type.enum) : type;
+}
 function Expand(type) {
-  return IsUnion(type) ? [...type.anyOf] : [type];
+  const canonicalArgument = CanonicalArgument(type);
+  return IsUnion(canonicalArgument) ? [...canonicalArgument.anyOf] : [canonicalArgument];
 }
 function Append(current, type) {
   return current.reduce((result, left) => [...result, [...left, type]], []);
@@ -9940,6 +9959,23 @@ function ResolveArgumentsContext(context, state, parameters, arguments_) {
 }
 
 // node_modules/typebox/build/type/engine/call/instantiate.mjs
+var instantiationDepth = 0;
+var instantiationCount = 0;
+function InstantiationAssert() {
+  if (guard_exports.IsLessThan(instantiationCount, settings_exports.Get().maxInstantiationCount))
+    return;
+  throw Error("Type instantiation is excessively deep and possibly infinite");
+}
+function InstantiationIncrement() {
+  InstantiationAssert();
+  instantiationCount++;
+  instantiationDepth++;
+}
+function InstantiationDecrement() {
+  instantiationDepth--;
+  if (guard_exports.IsEqual(instantiationDepth, 0))
+    instantiationCount = 0;
+}
 function Peek(state) {
   const result = guard_exports.IsGreaterThan(state.callstack.length, 0) ? state.callstack[state.callstack.length - 1] : "";
   return result;
@@ -9949,12 +9985,20 @@ function IsTailCall(state, name) {
   return result;
 }
 function CallDispatch(context, state, target, parameters, expression, arguments_) {
-  const argumentsContext = ResolveArgumentsContext(context, state, parameters, arguments_);
-  const returnType = InstantiateType(argumentsContext, State([...state["callstack"], target["$ref"]], state["visited"]), expression);
-  return InstantiateType(argumentsContext, State([], []), returnType);
+  InstantiationIncrement();
+  try {
+    const argumentsContext = ResolveArgumentsContext(context, state, parameters, arguments_);
+    const returnType = InstantiateType(argumentsContext, State([...state["callstack"], target["$ref"]], state["visited"]), expression);
+    return InstantiateType(argumentsContext, State([], []), returnType);
+  } finally {
+    InstantiationDecrement();
+  }
 }
 function CallDistributed(context, state, target, parameters, expression, distributedArguments) {
-  return distributedArguments.reduce((result, arguments_) => [...result, CallDispatch(context, state, target, parameters, expression, arguments_)], []);
+  return distributedArguments.reduce((result, arguments_) => {
+    const returnType = CallDispatch(context, state, target, parameters, expression, arguments_);
+    return [...result, returnType];
+  }, []);
 }
 function CallImmediate(context, state, target, parameters, expression, arguments_) {
   const distributedArguments = DistributeArguments(parameters, arguments_, expression);
@@ -10173,10 +10217,8 @@ function ExtractType(left, right) {
   const result = result_exports.IsExtendsTrueLike(check2) ? [left] : [];
   return result;
 }
-function ExtractUnion(types, right) {
-  return types.reduce((result, head) => {
-    return [...result, ...ExtractType(head, right)];
-  }, []);
+function ExtractUnion(left, right, result = []) {
+  return guard_exports.ShiftLeft(left, (head, tail) => ExtractUnion(tail, right, [...result, ...ExtractType(head, right)]), () => result);
 }
 function ExtractOperation(left, right) {
   const evaluated = EvaluateType(left);
@@ -12109,10 +12151,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path4) {
-  if (!path4)
+function getElementAtPath(obj, path2) {
+  if (!path2)
     return obj;
-  return path4.reduce((acc, key) => acc?.[key], obj);
+  return path2.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12521,11 +12563,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path4, issues) {
+function prefixIssues(path2, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path4);
+    iss.path.unshift(path2);
     return iss;
   });
 }
@@ -12672,16 +12714,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path4 = []) => {
+  const processError = (error52, path2 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path4, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else {
-        const fullpath = [...path4, ...issue2.path];
+        const fullpath = [...path2, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12708,17 +12750,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path4 = []) => {
+  const processError = (error52, path2 = []) => {
     var _a3, _b;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path4, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else {
-        const fullpath = [...path4, ...issue2.path];
+        const fullpath = [...path2, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -12750,8 +12792,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path4 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path4) {
+  const path2 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path2) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -25443,13 +25485,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path4 = ref.slice(1).split("/").filter(Boolean);
-  if (path4.length === 0) {
+  const path2 = ref.slice(1).split("/").filter(Boolean);
+  if (path2.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path4[0] === defsKey) {
-    const key = path4[1];
+  if (path2[0] === defsKey) {
+    const key = path2[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -25952,7 +25994,6 @@ var FaceTimeRealtimeConfigSchema = external_exports.object({
 var FaceTimeAvatarConfigSchema = external_exports.object({
   enabled: external_exports.boolean().default(false).optional(),
   port: external_exports.number().int().min(1).max(65535).default(18794).optional(),
-  modelUrl: nonEmpty.optional(),
   audioDelayMs: external_exports.number().int().min(0).max(500).default(80).optional(),
   maxBufferedBytes: external_exports.number().int().min(65536).max(8 * 1024 * 1024).default(1048576).optional(),
   obs: external_exports.object({
@@ -26014,7 +26055,6 @@ var avatarJsonSchema = {
   properties: {
     enabled: { type: "boolean", default: false },
     port: { type: "integer", minimum: 1, maximum: 65535, default: 18794 },
-    modelUrl: { type: "string", minLength: 1 },
     audioDelayMs: { type: "integer", minimum: 0, maximum: 500, default: 80 },
     maxBufferedBytes: {
       type: "integer",
@@ -26297,7 +26337,6 @@ function createFaceTimePluginBase() {
       selectionLabel: "FaceTime Audio (macOS)",
       docsPath: "/channels/facetime",
       blurb: "Answer and place FaceTime Audio calls through a realtime voice agent on this Mac.",
-      showInSetup: true,
       quickstartAllowFrom: true
     },
     setupWizard: faceTimeOnboardingAdapter,
@@ -26357,8 +26396,9 @@ function createFaceTimePluginBase() {
 import { randomUUID } from "node:crypto";
 
 // src/avatar/runtime.ts
-import { randomBytes } from "node:crypto";
-import path3 from "node:path";
+import {
+  createAvatarRenderer
+} from "openclaw-avatar-plugin/renderer";
 
 // node_modules/obs-websocket-js/dist/chunk-MVPOL3ZW.js
 var import_debug = __toESM(require_src(), 1);
@@ -26787,251 +26827,59 @@ var FaceTimeObsController = class {
   }
 };
 
-// src/avatar/server.ts
-import { timingSafeEqual } from "node:crypto";
-import fs from "node:fs";
-import { createServer } from "node:http";
-import path2 from "node:path";
-
-// node_modules/ws/wrapper.mjs
-var import_stream = __toESM(require_stream(), 1);
-var import_extension = __toESM(require_extension(), 1);
-var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
-var import_receiver = __toESM(require_receiver(), 1);
-var import_sender = __toESM(require_sender(), 1);
-var import_subprotocol = __toESM(require_subprotocol(), 1);
-var import_websocket = __toESM(require_websocket(), 1);
-var import_websocket_server = __toESM(require_websocket_server(), 1);
-
-// src/avatar/server.ts
-var CONTENT_TYPES = {
-  ".bin": "application/octet-stream",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8"
-};
-var FaceTimeAvatarServer = class {
-  assetsPath;
-  token;
-  requestedPort;
-  maxBufferedBytes;
-  modelUrl;
-  #server = null;
-  #webSockets = null;
-  #port = 0;
-  #connectedClients = 0;
-  #readyClients = 0;
-  #sentBytes = 0;
-  #droppedBytes = 0;
-  constructor(params) {
-    this.assetsPath = params.assetsPath;
-    this.token = params.token;
-    this.requestedPort = params.port;
-    this.maxBufferedBytes = params.maxBufferedBytes;
-    this.modelUrl = params.modelUrl;
-  }
-  get rendererUrl() {
-    if (!this.#port) {
-      throw new Error("Avatar renderer is not running");
-    }
-    return `http://127.0.0.1:${this.#port}/?token=${encodeURIComponent(this.token)}`;
-  }
-  async start() {
-    if (this.#server) {
-      return;
-    }
-    for (const filename of [
-      "index.html",
-      "avatar.js",
-      "headworklet.mjs",
-      "model-en-mixed.bin",
-      "playback-worklet.js"
-    ]) {
-      if (!fs.existsSync(path2.join(this.assetsPath, filename))) {
-        throw new Error(`Avatar asset is missing: ${filename}; run npm run build:avatar`);
-      }
-    }
-    const server = createServer((request, response) => {
-      const url2 = new URL(request.url ?? "/", "http://127.0.0.1");
-      if (url2.pathname === "/health") {
-        response.setHeader("content-type", "application/json; charset=utf-8");
-        response.end(JSON.stringify(this.snapshot()));
-        return;
-      }
-      const assets = {
-        "/": "index.html",
-        "/avatar.js": "avatar.js",
-        "/headworklet.mjs": "headworklet.mjs",
-        "/model-en-mixed.bin": "model-en-mixed.bin",
-        "/playback-worklet.js": "playback-worklet.js"
-      };
-      const filename = assets[url2.pathname];
-      if (!filename) {
-        response.statusCode = 404;
-        response.end("not found");
-        return;
-      }
-      response.setHeader(
-        "content-security-policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: https:; img-src 'self' data: blob: https:; media-src 'none'; object-src 'none'; frame-ancestors 'self'"
-      );
-      response.setHeader("cache-control", "no-store");
-      response.setHeader("content-type", CONTENT_TYPES[path2.extname(filename)] ?? "application/octet-stream");
-      fs.createReadStream(path2.join(this.assetsPath, filename)).pipe(response);
-    });
-    const webSockets = new import_websocket_server.default({ noServer: true, maxPayload: 64 * 1024 });
-    server.on("upgrade", (request, socket, head) => {
-      const url2 = new URL(request.url ?? "/", "http://127.0.0.1");
-      if (url2.pathname !== "/stream" || !this.#validToken(url2.searchParams.get("token"))) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-      webSockets.handleUpgrade(request, socket, head, (client) => {
-        webSockets.emit("connection", client, request);
-      });
-    });
-    webSockets.on("connection", (client) => {
-      this.#connectedClients += 1;
-      client.send(
-        JSON.stringify({
-          type: "hello",
-          sampleRateHz: 24e3,
-          modelUrl: this.modelUrl
-        })
-      );
-      let ready = false;
-      client.on("message", (data, binary) => {
-        if (binary) {
-          return;
-        }
-        try {
-          const message = JSON.parse(String(data));
-          if (message.type === "renderer-status" && Boolean(message.ready) !== ready) {
-            ready = Boolean(message.ready);
-            this.#readyClients += ready ? 1 : -1;
-          }
-        } catch {
-        }
-      });
-      client.on("close", () => {
-        this.#connectedClients -= 1;
-        if (ready) {
-          this.#readyClients -= 1;
-        }
-      });
-    });
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(this.requestedPort, "127.0.0.1", () => {
-        server.off("error", reject);
-        resolve();
-      });
-    });
-    const address = server.address();
-    if (!address || typeof address === "string") {
-      server.close();
-      throw new Error("Avatar renderer did not bind a TCP port");
-    }
-    this.#server = server;
-    this.#webSockets = webSockets;
-    this.#port = address.port;
-  }
-  sendAudio(audio) {
-    let delivered = false;
-    let clients = 0;
-    for (const client of this.#webSockets?.clients ?? []) {
-      clients += 1;
-      if (client.readyState !== import_websocket.default.OPEN || client.bufferedAmount + audio.byteLength > this.maxBufferedBytes) {
-        this.#droppedBytes += audio.byteLength;
-        continue;
-      }
-      client.send(audio, { binary: true });
-      this.#sentBytes += audio.byteLength;
-      delivered = true;
-    }
-    if (clients === 0) {
-      this.#droppedBytes += audio.byteLength;
-    }
-    return delivered;
-  }
-  broadcast(message) {
-    const encoded = JSON.stringify(message);
-    for (const client of this.#webSockets?.clients ?? []) {
-      if (client.readyState === import_websocket.default.OPEN) {
-        client.send(encoded);
-      }
-    }
-  }
-  snapshot() {
-    return {
-      running: Boolean(this.#server),
-      port: this.#port || null,
-      connectedClients: this.#connectedClients,
-      readyClients: this.#readyClients,
-      sentBytes: this.#sentBytes,
-      droppedBytes: this.#droppedBytes
-    };
-  }
-  async stop() {
-    const server = this.#server;
-    const webSockets = this.#webSockets;
-    this.#server = null;
-    this.#webSockets = null;
-    this.#port = 0;
-    for (const client of webSockets?.clients ?? []) {
-      client.close(1001, "avatar renderer stopped");
-    }
-    await Promise.all([
-      new Promise((resolve) => webSockets?.close(() => resolve()) ?? resolve()),
-      new Promise((resolve) => server?.close(() => resolve()) ?? resolve())
-    ]);
-  }
-  #validToken(value) {
-    if (!value) {
-      return false;
-    }
-    const expected = Buffer.from(this.token);
-    const actual = Buffer.from(value);
-    return expected.byteLength === actual.byteLength && timingSafeEqual(expected, actual);
-  }
-};
-
 // src/avatar/runtime.ts
 var FaceTimeAvatarRuntime = class {
-  server;
+  renderer;
   logger;
   obs;
+  video;
   #obsError;
+  #rendererError;
+  #activeSessionId = null;
   #callDroppedStart = 0;
+  #hadReadyRenderer = false;
+  #lastTransportDrops = 0;
   constructor(params) {
     const config2 = params.account.config.avatar ?? {};
-    const pluginRoot = path3.resolve(params.account.helperPath, "../../..");
     this.logger = params.logger;
-    this.server = new FaceTimeAvatarServer({
-      assetsPath: path3.join(pluginRoot, "dist", "avatar"),
-      token: randomBytes(24).toString("base64url"),
+    this.renderer = params.renderer ?? createAvatarRenderer({
       port: config2.port ?? 18794,
-      maxBufferedBytes: config2.maxBufferedBytes ?? 1048576,
-      modelUrl: config2.modelUrl
+      maxSubscriberMediaBytes: config2.maxBufferedBytes ?? 1048576,
+      maxTransportBufferedBytes: config2.maxBufferedBytes ?? 1048576,
+      onSubscriberError: (_id, error51) => this.#recordRendererError(error51)
     });
-    this.obs = config2.obs?.enabled ? new FaceTimeObsController({ config: config2.obs, logger: params.logger }) : null;
+    this.obs = params.obs !== void 0 ? params.obs : config2.obs?.enabled ? new FaceTimeObsController({ config: config2.obs, logger: params.logger }) : null;
+    this.video = {
+      width: config2.obs?.width ?? 1280,
+      height: config2.obs?.height ?? 720,
+      frameRate: 30
+    };
   }
   async start() {
-    await this.server.start();
-    this.logger.info(`[facetime-avatar] renderer listening on loopback port ${this.server.snapshot().port}`);
+    await this.renderer.start();
+    this.logger.info(`[facetime-avatar] renderer listening on ${new URL(this.renderer.rendererUrl).origin}`);
     if (this.obs) {
       try {
-        await this.obs.configure(this.server.rendererUrl);
+        await this.obs.configure(this.renderer.rendererUrl);
       } catch (error51) {
         this.#obsError = error51 instanceof Error ? error51.message : String(error51);
         this.logger.warn?.(`[facetime-avatar] OBS setup failed: ${this.#obsError}`);
       }
     }
   }
-  async beginCall(callId) {
-    this.#callDroppedStart = this.server.snapshot().droppedBytes;
-    this.server.broadcast({ type: "call-start", callId });
+  async beginCall(sessionId) {
+    try {
+      if (this.#activeSessionId) this.renderer.consumer.end("replaced");
+      this.#activeSessionId = sessionId;
+      this.#callDroppedStart = this.#droppedBytes();
+      this.#hadReadyRenderer = false;
+      this.#lastTransportDrops = this.renderer.snapshot().droppedTransportMedia;
+      this.renderer.consumer.start({ sessionId, video: this.video, initialState: "listening" });
+    } catch (error51) {
+      this.#activeSessionId = null;
+      this.#recordRendererError(error51);
+    }
+    if (!this.#activeSessionId) return;
     try {
       await this.obs?.startVirtualCamera();
     } catch (error51) {
@@ -27039,28 +26887,86 @@ var FaceTimeAvatarRuntime = class {
       this.logger.warn?.(`[facetime-avatar] virtual camera start failed: ${this.#obsError}`);
     }
   }
-  sendAudio(audio) {
-    return this.server.sendAudio(audio);
+  sendAudio(audio, ptsMs) {
+    if (!this.#activeSessionId) return false;
+    try {
+      const accepted = this.renderer.consumer.audio(audio, ptsMs);
+      const snapshot = this.renderer.snapshot();
+      if (snapshot.readyClients > 0) this.#hadReadyRenderer = true;
+      const overflowed = snapshot.droppedTransportMedia > this.#lastTransportDrops;
+      this.#lastTransportDrops = snapshot.droppedTransportMedia;
+      if (snapshot.rendererError || overflowed || !accepted && this.#hadReadyRenderer) {
+        this.#degradeVideo(
+          snapshot.rendererError ?? (overflowed ? "renderer transport overflow" : "renderer disconnected")
+        );
+      }
+      return accepted;
+    } catch (error51) {
+      this.#degradeVideo(error51 instanceof Error ? error51.message : String(error51));
+      return false;
+    }
   }
-  clear(callId) {
-    this.server.broadcast({ type: "clear", callId });
+  state(state, ptsMs) {
+    if (!this.#activeSessionId) return;
+    try {
+      this.renderer.consumer.state(state, ptsMs);
+    } catch (error51) {
+      this.#recordRendererError(error51);
+    }
   }
-  async endCall(callId) {
-    this.server.broadcast({ type: "clear", callId });
-    this.server.broadcast({ type: "call-end", callId });
+  clear(reason) {
+    if (!this.#activeSessionId) return;
+    try {
+      this.renderer.consumer.clear(reason);
+      this.renderer.consumer.state("listening", 0);
+    } catch (error51) {
+      this.#recordRendererError(error51);
+    }
+  }
+  async endCall(sessionId) {
+    if (this.#activeSessionId === sessionId) {
+      try {
+        this.renderer.consumer.end("hangup");
+      } catch (error51) {
+        this.#recordRendererError(error51);
+      }
+      this.#activeSessionId = null;
+    }
     await this.obs?.stopVirtualCamera().catch((error51) => {
-      this.logger.warn?.(
-        `[facetime-avatar] virtual camera stop failed: ${error51 instanceof Error ? error51.message : String(error51)}`
-      );
+      this.#obsError = error51 instanceof Error ? error51.message : String(error51);
+      this.logger.warn?.(`[facetime-avatar] virtual camera stop failed: ${this.#obsError}`);
     });
-    return this.server.snapshot().droppedBytes - this.#callDroppedStart;
+    return Math.max(0, this.#droppedBytes() - this.#callDroppedStart);
   }
   snapshot() {
-    return { ...this.server.snapshot(), rendererUrl: this.server.rendererUrl, obsError: this.#obsError };
+    return {
+      renderer: this.renderer.snapshot(),
+      rendererUrl: this.renderer.rendererUrl,
+      activeSessionId: this.#activeSessionId,
+      rendererError: this.#rendererError,
+      obsError: this.#obsError
+    };
   }
   async stop() {
-    await this.obs?.stop();
-    await this.server.stop();
+    this.#activeSessionId = null;
+    const results = await Promise.allSettled([this.obs?.stop(), this.renderer.stop()]);
+    for (const result of results) {
+      if (result.status === "rejected") this.#recordRendererError(result.reason);
+    }
+  }
+  #droppedBytes() {
+    return this.renderer.snapshot().session.droppedMediaBytes;
+  }
+  #recordRendererError(error51) {
+    this.#rendererError = error51 instanceof Error ? error51.message : String(error51);
+    this.logger.warn?.(`[facetime-avatar] renderer degraded: ${this.#rendererError}`);
+  }
+  #degradeVideo(reason) {
+    this.#recordRendererError(reason);
+    void this.obs?.stopVirtualCamera().catch((error51) => {
+      this.#obsError = error51 instanceof Error ? error51.message : String(error51);
+      this.logger.warn?.(`[facetime-avatar] audio-only fallback could not stop Virtual Camera: ${this.#obsError}`);
+    });
   }
 };
 
@@ -27126,8 +27032,8 @@ function decodeFaceTimeEvent(payload) {
   const result = nativeEventSchema.safeParse(parsed);
   if (!result.success) {
     const issue2 = result.error.issues[0];
-    const path4 = issue2?.path.length ? ` at ${issue2.path.join(".")}` : "";
-    throw new Error(`Invalid FaceTime native event${path4}: ${issue2?.message ?? "unknown error"}`);
+    const path2 = issue2?.path.length ? ` at ${issue2.path.join(".")}` : "";
+    throw new Error(`Invalid FaceTime native event${path2}: ${issue2?.message ?? "unknown error"}`);
   }
   return result.data;
 }
@@ -27396,6 +27302,7 @@ var FaceTimeOutputPacer = class {
   #pending = /* @__PURE__ */ new Set();
   #pendingBytes = 0;
   #droppedBytes = 0;
+  #avatarSamples = 0;
   constructor(params) {
     this.nativeBridge = params.nativeBridge;
     this.avatar = params.avatar;
@@ -27412,7 +27319,9 @@ var FaceTimeOutputPacer = class {
     return this.#droppedBytes;
   }
   send(audio) {
-    this.avatar?.sendAudio(audio);
+    const ptsMs = this.#avatarSamples / 24;
+    this.avatar?.sendAudio(audio, ptsMs);
+    this.#avatarSamples += Math.floor(audio.byteLength / 2);
     if (this.delayMs === 0) {
       this.#deliver(audio);
       return;
@@ -27432,17 +27341,21 @@ var FaceTimeOutputPacer = class {
     timer.unref?.();
     this.#pending.add(timer);
   }
-  clear() {
+  state(state) {
+    this.avatar?.state(state, this.#avatarSamples / 24);
+  }
+  clear(reason = "cancel") {
     for (const timer of this.#pending) {
       clearTimeout(timer);
     }
     this.#pending.clear();
     this.#pendingBytes = 0;
+    this.#avatarSamples = 0;
     try {
       this.nativeBridge.sendCommand({ type: "clear-audio", callId: this.callId });
     } catch {
     }
-    this.avatar?.clear(this.callId);
+    this.avatar?.clear(reason);
   }
   #deliver(audio) {
     if (this.nativeBridge.sendAudio(audio)) {
@@ -27451,15 +27364,17 @@ var FaceTimeOutputPacer = class {
   }
 };
 
+// src/facetime/realtime-sdk.ts
+import * as privateRealtimeVoiceSdk from "openclaw/plugin-sdk/realtime-voice";
+var sdk = privateRealtimeVoiceSdk;
+var REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME = sdk.REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME;
+var consultRealtimeVoiceAgent = sdk.consultRealtimeVoiceAgent;
+var createRealtimeVoiceBridgeSession = sdk.createRealtimeVoiceBridgeSession;
+var resolveConfiguredRealtimeVoiceProvider = sdk.resolveConfiguredRealtimeVoiceProvider;
+var resolveRealtimeVoiceAgentConsultTools = sdk.resolveRealtimeVoiceAgentConsultTools;
+var resolveRealtimeVoiceAgentConsultToolsAllow = sdk.resolveRealtimeVoiceAgentConsultToolsAllow;
+
 // src/facetime/realtime.ts
-import {
-  consultRealtimeVoiceAgent,
-  createRealtimeVoiceBridgeSession,
-  REALTIME_VOICE_AGENT_CONSULT_TOOL_NAME,
-  resolveConfiguredRealtimeVoiceProvider,
-  resolveRealtimeVoiceAgentConsultTools,
-  resolveRealtimeVoiceAgentConsultToolsAllow
-} from "openclaw/plugin-sdk/realtime-voice";
 function resolveToolPolicy(account) {
   const policy = account.config.realtime?.toolPolicy ?? "read-only";
   return policy === "read-only" ? "safe-read-only" : policy;
@@ -27533,7 +27448,7 @@ async function startFaceTimeRealtimeSession(params) {
         params.output.send(audio);
       },
       clearAudio: () => {
-        params.output.clear();
+        params.output.clear("barge-in");
       }
     },
     onTranscript: (role, text, final) => {
@@ -27543,10 +27458,14 @@ async function startFaceTimeRealtimeSession(params) {
           transcript.splice(0, transcript.length - 40);
         }
       }
+      if (final) params.output.state(role === "user" ? "thinking" : "listening");
       params.onTranscript?.(role, text, final);
     },
     onToolCall: (event) => handleToolCall(event),
-    onReady: () => params.onReady?.(resolved.provider.id),
+    onReady: () => {
+      params.output.state("listening");
+      params.onReady?.(resolved.provider.id);
+    },
     onError: (error51) => params.logger.warn?.(`[facetime] realtime error: ${error51.message}`),
     onClose: params.onClose
   });
@@ -27598,6 +27517,7 @@ var FaceTimeCallManager = class {
   #started = false;
   #stopping = false;
   #startRealtime;
+  #createAvatar;
   #onBridgeEvent = (event) => {
     void this.#handleNativeEvent(event).catch((error51) => {
       const message = error51 instanceof Error ? error51.message : String(error51);
@@ -27635,6 +27555,7 @@ var FaceTimeCallManager = class {
       logger: params.logger
     });
     this.#startRealtime = params.startRealtime ?? startFaceTimeRealtimeSession;
+    this.#createAvatar = params.createAvatar ?? ((avatarParams) => new FaceTimeAvatarRuntime(avatarParams));
   }
   async start(signal) {
     if (this.#started) {
@@ -27658,7 +27579,7 @@ var FaceTimeCallManager = class {
         channels: 1
       });
       if (this.account.config.avatar?.enabled) {
-        const avatar = new FaceTimeAvatarRuntime({ account: this.account, logger: this.logger });
+        const avatar = this.#createAvatar({ account: this.account, logger: this.logger });
         try {
           await avatar.start();
           this.#avatar = avatar;
@@ -27890,7 +27811,13 @@ var FaceTimeCallManager = class {
     }
   }
   async #startRealtimeForCall(call) {
-    await this.#avatar?.beginCall(call.id);
+    try {
+      await this.#avatar?.beginCall(call.id);
+    } catch (error51) {
+      this.logger.warn?.(
+        `[facetime-avatar] call rendering disabled: ${error51 instanceof Error ? error51.message : String(error51)}`
+      );
+    }
     const outputPacer = new FaceTimeOutputPacer({
       nativeBridge: this.bridge,
       avatar: this.#avatar ?? void 0,
@@ -27980,7 +27907,7 @@ var FaceTimeCallManager = class {
     }
     const outputPacer = this.#outputPacer;
     this.#outputPacer = null;
-    outputPacer?.clear();
+    outputPacer?.clear(state === "failed" ? "error" : "hangup");
     if (outputPacer?.droppedBytes) {
       call.outputDroppedBytes = outputPacer.droppedBytes;
     }
@@ -28026,7 +27953,7 @@ function getFaceTimeCallManager(accountId = "default") {
 
 // src/facetime/probe.ts
 import { execFile } from "node:child_process";
-import fs2 from "node:fs";
+import fs from "node:fs";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
 async function probeFaceTime(account, timeoutMs = 5e3) {
@@ -28043,8 +27970,8 @@ async function probeFaceTime(account, timeoutMs = 5e3) {
     },
     {
       id: "helper",
-      ok: fs2.existsSync(account.helperPath),
-      message: fs2.existsSync(account.helperPath) ? `Native helper found at ${account.helperPath}` : `Native helper missing at ${account.helperPath}; run npm run build:native`
+      ok: fs.existsSync(account.helperPath),
+      message: fs.existsSync(account.helperPath) ? `Native helper found at ${account.helperPath}` : `Native helper missing at ${account.helperPath}; run npm run build:native`
     }
   ];
   if (!checks.every((check2) => check2.ok)) {
