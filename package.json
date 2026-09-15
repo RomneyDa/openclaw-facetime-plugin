@@ -23,7 +23,6 @@
     "test": "vitest run",
     "test:package": "npm run build && node scripts/verify-package.mjs && node scripts/test-clean-install.mjs",
     "audit:dependencies": "npm audit --omit=dev --audit-level=high",
-    "avatar:preview": "npm run build:plugin && node dist/avatar-preview.mjs --demo",
     "avatar:obs-smoke": "npm run build:plugin && node dist/avatar-obs-smoke.mjs",
     "check": "npm run typecheck && npm run build && npm run test:native && npm run test",
     "check:release": "npm run check && npm run test:package && npm run audit:dependencies"
@@ -57,7 +56,6 @@
   },
   "dependencies": {
     "obs-websocket-js": "^5.0.8",
-    "openclaw-avatar-plugin": "git+https://github.com/RomneyDa/openclaw-avatar-plugin.git#0266fe23570775ad190176bef803b044e7b01677",
     "typebox": "^1.3.3",
     "zod": "^4.4.3"
   },

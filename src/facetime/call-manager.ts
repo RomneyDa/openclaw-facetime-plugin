@@ -69,6 +69,7 @@ export class FaceTimeCallManager {
   readonly #startRealtime: typeof startFaceTimeRealtimeSession;
   readonly #createAvatar: (params: {
     account: ResolvedFaceTimeAccount;
+    config: OpenClawConfig;
     logger: RuntimeLogger;
   }) => FaceTimeAvatarRuntime;
   readonly #onBridgeEvent = (event: FaceTimeNativeEvent) => {
@@ -108,6 +109,7 @@ export class FaceTimeCallManager {
     startRealtime?: typeof startFaceTimeRealtimeSession;
     createAvatar?: (params: {
       account: ResolvedFaceTimeAccount;
+      config: OpenClawConfig;
       logger: RuntimeLogger;
     }) => FaceTimeAvatarRuntime;
   }) {
@@ -148,7 +150,11 @@ export class FaceTimeCallManager {
         channels: 1,
       });
       if (this.account.config.avatar?.enabled) {
-        const avatar = this.#createAvatar({ account: this.account, logger: this.logger });
+        const avatar = this.#createAvatar({
+          account: this.account,
+          config: this.cfg,
+          logger: this.logger,
+        });
         try {
           await avatar.start();
           this.#avatar = avatar;

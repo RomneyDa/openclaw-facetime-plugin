@@ -35,7 +35,7 @@ describe("FaceTime A/V output pacer", () => {
     pacer.send(audio);
     expect(avatar.sendAudio).toHaveBeenCalledWith(audio, 0);
     pacer.send(audio);
-    expect(avatar.sendAudio).toHaveBeenNthCalledWith(2, audio, 20);
+    expect(avatar.sendAudio).toHaveBeenNthCalledWith(2, audio, 480);
     expect(nativeBridge.sendAudio).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(79);
     expect(nativeBridge.sendAudio).not.toHaveBeenCalled();

@@ -23,9 +23,8 @@ export type FaceTimeRealtimeConfig = {
 
 export type FaceTimeAvatarConfig = {
   enabled?: boolean;
-  port?: number;
+  provider?: string;
   audioDelayMs?: number;
-  maxBufferedBytes?: number;
   obs?: {
     enabled?: boolean;
     url?: string;

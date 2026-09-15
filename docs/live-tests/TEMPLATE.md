@@ -23,9 +23,9 @@
 | Busy rejection | | |
 | Local and remote hangup | | |
 | Gateway restart recovery | | |
-| Avatar visible and synchronized | | |
+| Selected live visual visible and synchronized | | |
 | Exact provider PCM drives mouth motion | | |
-| Renderer failure continues audio-only | | |
+| Live-visual provider failure continues audio-only | | |
 | OBS/Virtual Camera failure continues audio-only | | |
 | Next call starts without stale audio/video state | | |
 
@@ -41,7 +41,7 @@
 - FaceTime call ended:
 - Native helper absent:
 - Capture and playback stopped:
-- BlackHole/renderer queues empty:
+- BlackHole/provider queues empty:
 - OBS Virtual Camera stopped:
 - Gateway restarted and another call accepted:
 

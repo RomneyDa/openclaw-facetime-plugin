@@ -43,9 +43,8 @@
         "additionalProperties": false,
         "properties": {
           "enabled": { "type": "boolean", "default": false },
-          "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 18794 },
+          "provider": { "type": "string", "minLength": 1, "default": "lobster" },
           "audioDelayMs": { "type": "integer", "minimum": 0, "maximum": 500, "default": 80 },
-          "maxBufferedBytes": { "type": "integer", "minimum": 65536, "maximum": 8388608, "default": 1048576 },
           "obs": {
             "type": "object",
             "additionalProperties": false,
@@ -101,9 +100,8 @@
             "additionalProperties": false,
             "properties": {
               "enabled": { "type": "boolean", "default": false },
-              "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 18794 },
+              "provider": { "type": "string", "minLength": 1, "default": "lobster" },
               "audioDelayMs": { "type": "integer", "minimum": 0, "maximum": 500, "default": 80 },
-              "maxBufferedBytes": { "type": "integer", "minimum": 65536, "maximum": 8388608, "default": 1048576 },
               "obs": {
                 "type": "object",
                 "additionalProperties": false,
