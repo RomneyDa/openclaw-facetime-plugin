@@ -25,7 +25,6 @@ const required = [
   "README.md",
   "dist/index.mjs",
   "dist/setup-entry.mjs",
-  "dist/avatar-preview.mjs",
   "dist/avatar-obs-smoke.mjs",
   "index.ts",
   "native/Package.swift",

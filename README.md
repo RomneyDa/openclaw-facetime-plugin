@@ -30,7 +30,7 @@ control API; answer/dial/hangup use macOS Accessibility against FaceTime's UI.
 
 - macOS 13 or newer
 - FaceTime.app signed in to the identity dedicated to the agent
-- OpenClaw `>=2026.9.3`
+- OpenClaw `>=2026.9.3`; optional live visuals require `>=2026.9.4`
 - Apple Silicon Mac (`arm64`); Intel is not claimed or packaged in the first release
 - Xcode Command Line Tools (`xcode-select --install`) only when building the Swift helper from source
 - [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole) as a required **system peer dependency**
@@ -115,8 +115,8 @@ in; the live smoke test below proves that boundary.
       },
       "avatar": {
         "enabled": true,
+        "provider": "lobster",
         "audioDelayMs": 80,
-        "port": 18794,
         "obs": {
           "enabled": true,
           "url": "ws://127.0.0.1:4455",
@@ -136,22 +136,20 @@ OpenClaw realtime provider owns its current defaults. Provider-specific configur
 under `realtime.providers.<provider>`; for OpenAI, prefer the host's configured auth profile or
 `OPENAI_API_KEY` over plaintext configuration.
 
-## Optional video avatar
+## Optional live visual
 
-The video path uses `openclaw-avatar-plugin/renderer`, a code-native Canvas2D lobster with no remote
-assets or audible browser output. FaceTime starts the authenticated loopback renderer, gives its
-tokenized URL to a FaceTime-owned OBS Browser Source, and sends it the exact PCM already accepted by
-`FaceTimeOutputPacer`. Presentation timestamps come from emitted sample counts, never wall clock.
+FaceTime subscribes to an enabled OpenClaw live-visual provider selected by `avatar.provider`. The
+default `lobster` provider is registered by `openclaw-avatar-plugin`, which must be installed and
+enabled separately. FaceTime opens a generic timed visual stream, gives its returned browser-source
+URL to FaceTime-owned OBS, and sends the exact PCM already accepted by `FaceTimeOutputPacer`.
+Presentation timestamps use the stream's 24 kHz sample clock, never wall clock.
 
-`audioDelayMs` applies only to bounded BlackHole playback; the avatar package is unaware of that
-delay. Barge-in, cancellation, hangup, replacement, and error clear delayed BlackHole and avatar
-media together. Renderer or OBS failure is visible in status and degrades to audio-only calling.
+`audioDelayMs` applies only to bounded BlackHole playback; visual providers are unaware of that
+delay. Barge-in, cancellation, hangup, replacement, and error flush delayed BlackHole and provider
+media together. Provider or OBS failure is visible in status and degrades to audio-only calling.
 
-Preview the renderer with synthetic PCM:
-
-```bash
-npm run avatar:preview
-```
+The lobster package retains its own synthetic preview; FaceTime carries no renderer code or runtime
+dependency.
 
 For FaceTime video output:
 
@@ -166,7 +164,7 @@ For FaceTime video output:
 
 ### OpenClaw SDK compatibility
 
-This checkout is validated against `openclaw@2026.9.3`. OpenClaw currently describes
+The generic live-visual resolver requires OpenClaw 2026.9.4 or newer. OpenClaw currently describes
 `openclaw/plugin-sdk/realtime-voice` as a production-private seam for official plugins and omits its
 declarations from the npm package. The runtime export still exists and is isolated in
 `src/facetime/realtime-sdk.ts`, but publishing this repository as a supported third-party plugin is
@@ -280,7 +278,6 @@ npm test
 npm run test:native
 npm run build
 npm run check:release
-npm run avatar:preview
 ```
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the channel/runtime boundary and design provenance.

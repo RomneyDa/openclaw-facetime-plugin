@@ -14673,9 +14673,8 @@ var FaceTimeRealtimeConfigSchema = external_exports.object({
 }).strict();
 var FaceTimeAvatarConfigSchema = external_exports.object({
   enabled: external_exports.boolean().default(false).optional(),
-  port: external_exports.number().int().min(1).max(65535).default(18794).optional(),
+  provider: nonEmpty.default("lobster").optional(),
   audioDelayMs: external_exports.number().int().min(0).max(500).default(80).optional(),
-  maxBufferedBytes: external_exports.number().int().min(65536).max(8 * 1024 * 1024).default(1048576).optional(),
   obs: external_exports.object({
     enabled: external_exports.boolean().default(false).optional(),
     url: loopbackWebSocketUrl.default("ws://127.0.0.1:4455").optional(),
@@ -14734,14 +14733,8 @@ var avatarJsonSchema = {
   additionalProperties: false,
   properties: {
     enabled: { type: "boolean", default: false },
-    port: { type: "integer", minimum: 1, maximum: 65535, default: 18794 },
+    provider: { type: "string", minLength: 1, default: "lobster" },
     audioDelayMs: { type: "integer", minimum: 0, maximum: 500, default: 80 },
-    maxBufferedBytes: {
-      type: "integer",
-      minimum: 65536,
-      maximum: 8388608,
-      default: 1048576
-    },
     obs: {
       type: "object",
       additionalProperties: false,

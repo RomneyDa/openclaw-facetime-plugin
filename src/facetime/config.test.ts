@@ -38,19 +38,18 @@ describe("FaceTime config", () => {
     );
   });
 
-  it("accepts a bounded local avatar and rejects remote OBS control", () => {
+  it("accepts a live-visual provider and rejects remote OBS control", () => {
     expect(
       FaceTimeAccountConfigSchema.parse({
         identity: "a@b.com",
         inboundPolicy: "disabled",
         avatar: {
           enabled: true,
-          port: 18_794,
-          maxBufferedBytes: 1_048_576,
+          provider: "lobster",
           obs: { enabled: true, url: "ws://127.0.0.1:4455" },
         },
       }),
-    ).toMatchObject({ avatar: { enabled: true, obs: { enabled: true } } });
+    ).toMatchObject({ avatar: { enabled: true, provider: "lobster", obs: { enabled: true } } });
     expect(() =>
       FaceTimeAccountConfigSchema.parse({
         identity: "a@b.com",

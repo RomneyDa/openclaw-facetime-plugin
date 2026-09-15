@@ -12,13 +12,12 @@ await build({
   entryPoints: {
     index: "index.ts",
     "setup-entry": "setup-entry.ts",
-    "avatar-preview": "src/avatar/preview.ts",
     "avatar-obs-smoke": "src/avatar/obs-smoke.ts",
   },
   outdir,
   outExtension: { ".js": ".mjs" },
   bundle: true,
-  external: ["openclaw", "openclaw/*", "openclaw-avatar-plugin", "openclaw-avatar-plugin/*"],
+  external: ["openclaw", "openclaw/*"],
   platform: "node",
   format: "esm",
   banner: {

@@ -246,7 +246,7 @@ describe("FaceTime call policy and lifecycle", () => {
     const bridge = new FakeBridge({ helperPath: "/tmp/helper", logger });
     const avatar = {
       start: vi.fn(async () => {
-        throw new Error("renderer port unavailable");
+        throw new Error("live-visual provider unavailable");
       }),
       stop: vi.fn(async () => {}),
     } as unknown as FaceTimeAvatarRuntime;

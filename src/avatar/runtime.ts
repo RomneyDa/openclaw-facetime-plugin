@@ -1,41 +1,52 @@
-import {
-  createAvatarRenderer,
-  type AvatarClearReason,
-  type AvatarRenderer,
-  type AvatarState,
-} from "openclaw-avatar-plugin/renderer";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
 import type { ResolvedFaceTimeAccount } from "../facetime/types.js";
+import {
+  resolveLiveVisualProvider,
+  type LiveVisualHealth,
+  type LiveVisualProvider,
+  type LiveVisualSession,
+} from "./live-visual-sdk.js";
 import { FaceTimeObsController } from "./obs.js";
 
+export type FaceTimeAvatarState = "listening" | "thinking" | "speaking" | "idle";
+
 export class FaceTimeAvatarRuntime {
-  readonly renderer: AvatarRenderer;
   readonly logger: RuntimeLogger;
   readonly obs: FaceTimeObsController | null;
+  readonly providerId: string;
   readonly video: { width: number; height: number; frameRate: number };
+  #provider?: LiveVisualProvider;
+  #session: LiveVisualSession | null = null;
   #obsError?: string;
-  #rendererError?: string;
+  #visualError?: string;
   #activeSessionId: string | null = null;
   #callDroppedStart = 0;
-  #hadReadyRenderer = false;
-  #lastTransportDrops = 0;
+  #hadReadyVisual = false;
+  #lastHealth: LiveVisualHealth = { status: "closed", droppedMediaBytes: 0 };
+  readonly #config?: OpenClawConfig;
+  readonly #resolveProvider: (
+    providerId: string,
+    config?: OpenClawConfig,
+  ) => Promise<LiveVisualProvider | undefined>;
 
   constructor(params: {
     account: ResolvedFaceTimeAccount;
+    config?: OpenClawConfig;
     logger: RuntimeLogger;
-    renderer?: AvatarRenderer;
+    provider?: LiveVisualProvider;
+    resolveProvider?: (
+      providerId: string,
+      config?: OpenClawConfig,
+    ) => Promise<LiveVisualProvider | undefined>;
     obs?: FaceTimeObsController | null;
   }) {
     const config = params.account.config.avatar ?? {};
     this.logger = params.logger;
-    this.renderer =
-      params.renderer ??
-      createAvatarRenderer({
-        port: config.port ?? 18_794,
-        maxSubscriberMediaBytes: config.maxBufferedBytes ?? 1_048_576,
-        maxTransportBufferedBytes: config.maxBufferedBytes ?? 1_048_576,
-        onSubscriberError: (_id, error) => this.#recordRendererError(error),
-      });
+    this.#config = params.config;
+    this.providerId = config.provider ?? "lobster";
+    this.#provider = params.provider;
+    this.#resolveProvider = params.resolveProvider ?? resolveLiveVisualProvider;
     this.obs =
       params.obs !== undefined
         ? params.obs
@@ -50,52 +61,111 @@ export class FaceTimeAvatarRuntime {
   }
 
   async start(): Promise<void> {
-    await this.renderer.start();
-    this.logger.info(`[facetime-avatar] renderer listening on ${new URL(this.renderer.rendererUrl).origin}`);
-    if (this.obs) {
-      try {
-        await this.obs.configure(this.renderer.rendererUrl);
-      } catch (error) {
-        this.#obsError = error instanceof Error ? error.message : String(error);
-        this.logger.warn?.(`[facetime-avatar] OBS setup failed: ${this.#obsError}`);
-      }
+    this.#provider ??= await this.#resolveProvider(this.providerId, this.#config);
+    if (!this.#provider) {
+      throw new Error(`live-visual provider not found: ${this.providerId}`);
     }
+    this.logger.info(`[facetime-avatar] using live-visual provider ${this.#provider.id}`);
   }
 
   async beginCall(sessionId: string): Promise<void> {
+    if (!this.#provider) return;
+    if (this.#session) {
+      await this.#session.close("replaced").catch((error) => this.#recordVisualError(error));
+    }
+    this.#activeSessionId = null;
     try {
-      if (this.#activeSessionId) this.renderer.consumer.end("replaced");
+      const session = await this.#provider.open({
+        streamId: sessionId,
+        clock: { unitsPerSecond: 24_000 },
+        video: this.video,
+        audio: { encoding: "pcm-s16le", sampleRateHz: 24_000, channels: 1 },
+      });
+      this.#session = session;
       this.#activeSessionId = sessionId;
-      this.#callDroppedStart = this.#droppedBytes();
-      this.#hadReadyRenderer = false;
-      this.#lastTransportDrops = this.renderer.snapshot().droppedTransportMedia;
-      this.renderer.consumer.start({ sessionId, video: this.video, initialState: "listening" });
+      this.#lastHealth = this.#readHealth();
+      this.#callDroppedStart = this.#lastHealth.droppedMediaBytes;
+      this.#hadReadyVisual = this.#lastHealth.status === "ready";
     } catch (error) {
       this.#activeSessionId = null;
-      this.#recordRendererError(error);
+      this.#recordVisualError(error);
+      return;
     }
-    if (!this.#activeSessionId) return;
+    const session = this.#session;
+    if (!session) return;
     try {
+      await this.obs?.configure(session.output.url);
       await this.obs?.startVirtualCamera();
     } catch (error) {
-      this.#obsError = error instanceof Error ? error.message : String(error);
-      this.logger.warn?.(`[facetime-avatar] virtual camera start failed: ${this.#obsError}`);
+      this.#recordObsError(error);
+      await this.obs?.stopVirtualCamera().catch((obsError) => this.#recordObsError(obsError));
     }
   }
 
-  sendAudio(audio: Uint8Array, ptsMs: number): boolean {
-    if (!this.#activeSessionId) return false;
+  sendAudio(audio: Uint8Array, ptsSamples: number): boolean {
+    return this.#write({ type: "audio", pts: ptsSamples, data: audio });
+  }
+
+  state(state: FaceTimeAvatarState, ptsSamples: number): void {
+    this.#write({ type: "cue", pts: ptsSamples, name: "activity", value: state });
+  }
+
+  clear(reason: string): void {
+    if (!this.#session) return;
     try {
-      const accepted = this.renderer.consumer.audio(audio, ptsMs);
-      const snapshot = this.renderer.snapshot();
-      if (snapshot.readyClients > 0) this.#hadReadyRenderer = true;
-      const overflowed = snapshot.droppedTransportMedia > this.#lastTransportDrops;
-      this.#lastTransportDrops = snapshot.droppedTransportMedia;
-      if (snapshot.rendererError || overflowed || (!accepted && this.#hadReadyRenderer)) {
-        this.#degradeVideo(
-          snapshot.rendererError ?? (overflowed ? "renderer transport overflow" : "renderer disconnected"),
-        );
+      const flushed = this.#session.write({ type: "flush", reason });
+      const reset = this.#session.write({
+        type: "cue",
+        pts: 0,
+        name: "activity",
+        value: "listening",
+      });
+      this.#inspectHealth(flushed && reset);
+    } catch (error) {
+      this.#degradeVideo(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async endCall(sessionId: string): Promise<number> {
+    if (this.#activeSessionId === sessionId) {
+      const session = this.#session;
+      if (session) {
+        this.#lastHealth = this.#readHealth();
+        await session.close("hangup").catch((error) => this.#recordVisualError(error));
       }
+      this.#session = null;
+      this.#activeSessionId = null;
+    }
+    await this.obs?.stopVirtualCamera().catch((error) => this.#recordObsError(error));
+    return Math.max(0, this.#lastHealth.droppedMediaBytes - this.#callDroppedStart);
+  }
+
+  snapshot() {
+    return {
+      providerId: this.providerId,
+      output: this.#session?.output ?? null,
+      health: this.#readHealth(),
+      activeSessionId: this.#activeSessionId,
+      visualError: this.#visualError,
+      obsError: this.#obsError,
+    };
+  }
+
+  async stop(): Promise<void> {
+    const session = this.#session;
+    this.#session = null;
+    this.#activeSessionId = null;
+    const results = await Promise.allSettled([this.obs?.stop(), session?.close("shutdown")]);
+    for (const result of results) {
+      if (result.status === "rejected") this.#recordVisualError(result.reason);
+    }
+  }
+
+  #write(event: Parameters<LiveVisualSession["write"]>[0]): boolean {
+    if (!this.#session || !this.#activeSessionId) return false;
+    try {
+      const accepted = this.#session.write(event);
+      this.#inspectHealth(accepted);
       return accepted;
     } catch (error) {
       this.#degradeVideo(error instanceof Error ? error.message : String(error));
@@ -103,73 +173,45 @@ export class FaceTimeAvatarRuntime {
     }
   }
 
-  state(state: AvatarState, ptsMs: number): void {
-    if (!this.#activeSessionId) return;
+  #inspectHealth(accepted: boolean): void {
+    if (!this.#session) return;
+    const health = this.#readHealth();
+    const overflowed = health.droppedMediaBytes > this.#lastHealth.droppedMediaBytes;
+    if (health.status === "ready") this.#hadReadyVisual = true;
+    this.#lastHealth = health;
+    if (health.status === "degraded" || overflowed || (!accepted && this.#hadReadyVisual)) {
+      this.#degradeVideo(
+        health.error ??
+          (overflowed ? "live-visual provider overflow" : "live-visual provider disconnected"),
+      );
+    }
+  }
+
+  #recordVisualError(error: unknown): void {
+    this.#visualError = error instanceof Error ? error.message : String(error);
+    this.logger.warn?.(`[facetime-avatar] visual degraded: ${this.#visualError}`);
+  }
+
+  #readHealth(): LiveVisualHealth {
+    if (!this.#session) return this.#lastHealth;
     try {
-      this.renderer.consumer.state(state, ptsMs);
+      return this.#session.health();
     } catch (error) {
-      this.#recordRendererError(error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.#recordVisualError(message);
+      return { ...this.#lastHealth, status: "degraded", error: message };
     }
   }
 
-  clear(reason: AvatarClearReason): void {
-    if (!this.#activeSessionId) return;
-    try {
-      this.renderer.consumer.clear(reason);
-      this.renderer.consumer.state("listening", 0);
-    } catch (error) {
-      this.#recordRendererError(error);
-    }
-  }
-
-  async endCall(sessionId: string): Promise<number> {
-    if (this.#activeSessionId === sessionId) {
-      try {
-        this.renderer.consumer.end("hangup");
-      } catch (error) {
-        this.#recordRendererError(error);
-      }
-      this.#activeSessionId = null;
-    }
-    await this.obs?.stopVirtualCamera().catch((error) => {
-      this.#obsError = error instanceof Error ? error.message : String(error);
-      this.logger.warn?.(`[facetime-avatar] virtual camera stop failed: ${this.#obsError}`);
-    });
-    return Math.max(0, this.#droppedBytes() - this.#callDroppedStart);
-  }
-
-  snapshot() {
-    return {
-      renderer: this.renderer.snapshot(),
-      rendererUrl: this.renderer.rendererUrl,
-      activeSessionId: this.#activeSessionId,
-      rendererError: this.#rendererError,
-      obsError: this.#obsError,
-    };
-  }
-
-  async stop(): Promise<void> {
-    this.#activeSessionId = null;
-    const results = await Promise.allSettled([this.obs?.stop(), this.renderer.stop()]);
-    for (const result of results) {
-      if (result.status === "rejected") this.#recordRendererError(result.reason);
-    }
-  }
-
-  #droppedBytes(): number {
-    return this.renderer.snapshot().session.droppedMediaBytes;
-  }
-
-  #recordRendererError(error: unknown): void {
-    this.#rendererError = error instanceof Error ? error.message : String(error);
-    this.logger.warn?.(`[facetime-avatar] renderer degraded: ${this.#rendererError}`);
+  #recordObsError(error: unknown): void {
+    this.#obsError = error instanceof Error ? error.message : String(error);
+    this.logger.warn?.(`[facetime-avatar] OBS degraded: ${this.#obsError}`);
   }
 
   #degradeVideo(reason: string): void {
-    this.#recordRendererError(reason);
+    this.#recordVisualError(reason);
     void this.obs?.stopVirtualCamera().catch((error) => {
-      this.#obsError = error instanceof Error ? error.message : String(error);
-      this.logger.warn?.(`[facetime-avatar] audio-only fallback could not stop Virtual Camera: ${this.#obsError}`);
+      this.#recordObsError(error);
     });
   }
 }

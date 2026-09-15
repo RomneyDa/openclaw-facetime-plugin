@@ -1,6 +1,5 @@
 import type { RuntimeLogger } from "openclaw/plugin-sdk/plugin-runtime";
-import type { AvatarClearReason, AvatarState } from "openclaw-avatar-plugin/renderer";
-import type { FaceTimeAvatarRuntime } from "../avatar/runtime.js";
+import type { FaceTimeAvatarRuntime, FaceTimeAvatarState } from "../avatar/runtime.js";
 import type { FaceTimeNativeBridge } from "./native-bridge.js";
 
 export class FaceTimeOutputPacer {
@@ -43,8 +42,7 @@ export class FaceTimeOutputPacer {
   }
 
   send(audio: Buffer): void {
-    const ptsMs = this.#avatarSamples / 24;
-    this.avatar?.sendAudio(audio, ptsMs);
+    this.avatar?.sendAudio(audio, this.#avatarSamples);
     this.#avatarSamples += Math.floor(audio.byteLength / 2);
     if (this.delayMs === 0) {
       this.#deliver(audio);
@@ -66,11 +64,11 @@ export class FaceTimeOutputPacer {
     this.#pending.add(timer);
   }
 
-  state(state: AvatarState): void {
-    this.avatar?.state(state, this.#avatarSamples / 24);
+  state(state: FaceTimeAvatarState): void {
+    this.avatar?.state(state, this.#avatarSamples);
   }
 
-  clear(reason: AvatarClearReason = "cancel"): void {
+  clear(reason = "cancel"): void {
     for (const timer of this.#pending) {
       clearTimeout(timer);
     }
