@@ -30,7 +30,8 @@ control API; answer/dial/hangup use macOS Accessibility against FaceTime's UI.
 
 - macOS 13 or newer
 - FaceTime.app signed in to the identity dedicated to the agent
-- OpenClaw `>=2026.9.3`; optional live visuals require `>=2026.9.4`
+- OpenClaw `>=2026.9.3`; optional live visuals require the first OpenClaw release that contains
+  `openclaw/plugin-sdk/live-visual` (not yet released as of 2026-09-16)
 - Apple Silicon Mac (`arm64`); Intel is not claimed or packaged in the first release
 - Xcode Command Line Tools (`xcode-select --install`) only when building the Swift helper from source
 - [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole) as a required **system peer dependency**
@@ -164,7 +165,8 @@ For FaceTime video output:
 
 ### OpenClaw SDK compatibility
 
-The generic live-visual resolver requires OpenClaw 2026.9.4 or newer. OpenClaw currently describes
+The generic live-visual resolver is not present in the released OpenClaw 2026.9.4 package. Live
+visuals require the first OpenClaw release that contains `openclaw/plugin-sdk/live-visual`. OpenClaw currently describes
 `openclaw/plugin-sdk/realtime-voice` as a production-private seam for official plugins and omits its
 declarations from the npm package. The runtime export still exists and is isolated in
 `src/facetime/realtime-sdk.ts`, but publishing this repository as a supported third-party plugin is
